@@ -1,7 +1,3 @@
-Berikut adalah versi `README.md` yang telah dirapikan. Tanda-tanda khusus seperti asteris (`*`) dan dolar (`$`) telah dibersihkan atau disesuaikan dengan format Markdown standar agar terlihat lebih bersih, profesional, dan mudah dibaca (baik di editor teks maupun saat dirender).
-
----
-
 # Proyek Pengolahan Sinyal EKG Berbasis Discrete Wavelet Transform (DWT db4) From Scratch
 
 Proyek ini merupakan implementasi deteksi gelombang elektrokardiogram (**P-Q-R-S-T**) menggunakan metode **Discrete Wavelet Transform (DWT)** dengan basis **Daubechies 4 (db4)** yang dibangun secara mandiri (_from scratch_, tanpa pustaka komputasi wavelet otomatis).
