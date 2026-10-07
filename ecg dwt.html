@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deteksi P Q R S T pada ECG - DWT db4 (from scratch)</title>
+<style>
+:root{--bg:#f4f6f8;--panel:#fff;--fg:#1d2733;--grid:#e3e8ee;--plot:#fff;--accent:#1565c0;--line:#cfd6de}
+@media (prefers-color-scheme:dark){:root{--bg:#161a1f;--panel:#1f252c;--fg:#e6e9ed;--grid:#2d353e;--plot:#1b2026;--accent:#64a8ff;--line:#38414b}}
+*{box-sizing:border-box}
+body{margin:0;font:13px system-ui,sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
+#side{width:262px;min-width:262px;background:var(--panel);border-right:1px solid var(--line);padding:10px;overflow:auto}
+#side h3{margin:12px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
+#side label{display:flex;align-items:center;justify-content:space-between;margin:3px 0}
+#side input[type=number],#side input[type=text]{width:110px;padding:3px 5px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.two label{display:block}.two input{width:100%!important;margin-top:1px}
+button{cursor:pointer;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px 10px}
+#go{width:100%;background:var(--accent);color:#fff;border:0;font-weight:600;margin:8px 0 4px;padding:8px}
+#demo{width:100%;margin-top:4px;font-size:12px}
+#status{font-size:12px;margin:6px 0;min-height:30px;word-break:break-word}#status.err{color:#d32f2f}
+#fileinfo{font-size:11px;opacity:.75;margin-top:4px}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#tabs{display:flex;gap:2px;padding:8px 8px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+#tabs button{border-radius:4px 4px 0 0;border-bottom:0;padding:6px 14px}#tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+#wrap{flex:1;overflow:auto;padding:8px}
+#cv{display:block;border:1px solid var(--line)}
+#info{white-space:pre-wrap;font:12px ui-monospace,monospace;margin:8px 2px}#hint{font-size:11px;opacity:.6;margin:4px 2px}
+@media (max-width:760px){body{flex-direction:column;height:auto}#side{width:100%;min-width:0}}
+</style>
+</head>
+<body>
+<div id="side">
+  <h3>Process</h3>
+  <label>File <input type="file" id="files" multiple accept=".hea,.dat,.atr" style="width:150px;font-size:11px"></label>
+  <div id="fileinfo">Belum ada file</div>
+  <label style="margin-top:6px">Record <input type="text" id="rec" value="-" readonly></label>
+  <label>NData <input type="number" id="nd" value="999" min="400"></label>
+  <label>Start <input type="number" id="st" value="0" min="0"></label>
+  <label>Channel <input type="number" id="ch" value="0" min="0" max="1"></label>
+  <button id="go">Action</button>
+  <button id="demo">Coba dengan sinyal demo</button>
+  <div id="status">Pilih 122.hea, 122.dat, 122.atr sekaligus, lalu klik Action.</div>
+  <h3>T / Delay (filter Q<sub>j</sub>)</h3>
+  <div class="two"><div id="T"></div><div id="D"></div></div>
+  <label><span><input type="checkbox" id="auto" checked> T/Delay otomatis</span></label>
+  <h3>Ambang &amp; jendela</h3>
+  <label>ThR <input type="number" id="thR" value="0.4" step="0.05"></label>
+  <label>ThP <input type="number" id="thP" value="0.15" step="0.05"></label>
+  <label>ThT <input type="number" id="thT" value="0.2" step="0.05"></label>
+  <label>Refr (ms) <input type="number" id="refr" value="200"></label>
+  <label>Pwin (ms) <input type="number" id="pw" value="300"></label>
+  <label>Twin (ms) <input type="number" id="tw" value="450"></label>
+  <button id="reset-btn" style="width:100%;margin-top:6px;font-size:11px">Reset Parameter Default</button>
+  <div id="stats-box" style="margin-top:10px;padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;font-size:11px;line-height:1.4;display:none">
+    <div style="font-weight:600;margin-bottom:4px;color:var(--accent)">Statistik Klinis:</div>
+    <div id="stat-bpm">BPM: -</div>
+    <div id="stat-beats">Detak: -</div>
+    <div id="stat-acc">Akurasi Se/PPV: -</div>
+    <button id="export-csv-btn" style="width:100%;margin-top:6px;background:var(--accent);color:#fff;border:0;padding:5px;font-size:11px;border-radius:3px">Download Hasil (.csv)</button>
+  </div>
+</div>
+<div id="main">
+  <div id="tabs"></div>
+  <div id="wrap"><canvas id="cv"></canvas><div id="hint"></div><div id="info"></div></div>
+</div>
+<script>
+/* ===================== DWT FROM SCRATCH (db4) ===================== */
+const h_db4 = [0.2303778133088964, 0.7148465705529154, 0.6308807679298587,
+  -0.0279837694168599, -0.1870348117190931, 0.0308413818355607,
+  0.0328830116668852, -0.0105974017850690];                       // LPF db4 (manual)
+const LF = h_db4.length;
+const g_db4 = h_db4.map((_, n) => ((n % 2 === 0) ? 1 : -1) * h_db4[LF - 1 - n]);   // HPF: g[n] = (-1)^n h[L-1-n]
+const SQ2 = Math.SQRT2;
+const H = h_db4.map(v => v / SQ2), G = g_db4.map(v => v / SQ2);    // gain DC = 1 per level
+const JMAX = 8;
+
+function konv(x, f) {                       // konvolusi penuh, ditulis manual
+  const y = new Float64Array(x.length + f.length - 1);
+  for (let m = 0; m < f.length; m++) {
+    const c = f[m]; if (c === 0) continue;
+    for (let i = 0; i < x.length; i++) y[m + i] += c * x[i];
+  }
+  return y;
+}
+function upsample(f, m) {                   // algoritma a trous: sisipkan (m-1) nol
+  const out = new Float64Array((f.length - 1) * m + 1);
+  for (let i = 0; i < f.length; i++) out[i * m] = f[i];
+  return out;
+}
+function buildQ(J) {                        // Q_j = G(2^(j-1)w) H(2^(j-2)w) ... H(w)
+  const Qs = []; let a = new Float64Array([1]);
+  for (let j = 1; j <= J; j++) {
+    Qs.push(konv(a, upsample(G, 2 ** (j - 1))));
+    a = konv(a, upsample(H, 2 ** (j - 1)));
+  }
+  return Qs;
+}
+const Q = buildQ(JMAX);
+function delayOf(q) {                       // pusat energi impuls respons -> T_j
+  let s1 = 0, s2 = 0; for (let n = 0; n < q.length; n++) { s1 += n * q[n] * q[n]; s2 += q[n] * q[n]; }
+  return Math.round(s1 / s2);
+}
+const T_auto = Q.map(delayOf);
+const Tmax_auto = Math.max(...T_auto);
+const D_auto = T_auto.map(t => Tmax_auto - t);               // Delay_j = Tmax - T_j
+const SGN = Q.map(q => { let c = 0, best = 0, bs = 1; for (const v of q) { c += v; if (Math.abs(c) > best) { best = Math.abs(c); bs = c > 0 ? 1 : -1; } } return bs; });
+const DA = (() => { let a = new Float64Array([1]); const out = [];
+  for (let j = 1; j <= JMAX; j++) { a = konv(a, upsample(H, 2 ** (j - 1)));
+    let s1 = 0, s2 = 0; for (let n = 0; n < a.length; n++) { s1 += n * a[n]; s2 += a[n]; } out.push(Math.round(s1 / s2)); }
+  return out; })();
+
+function reflIdx(i, n) { if (n === 1) return 0; const p = 2 * (n - 1); const m = ((i % p) + p) % p; return m < n ? m : p - m; }
+function clip(i, lo, hi) { return i < lo ? lo : (i > hi ? hi : i); }
+
+function mallat(x, T, D, returnA) {
+  const n = x.length; let pad = 0; for (const q of Q) pad = Math.max(pad, q.length); pad = (pad >> 1) + 50;
+  const xp = new Float64Array(n + 2 * pad); for (let i = 0; i < xp.length; i++) xp[i] = x[reflIdx(i - pad, n)];
+  const Tmax = Math.max(...T); let a = xp; const Wj = [], Aj = [];
+  for (let j = 1; j <= Q.length; j++) {
+    const y = konv(a, upsample(G, 2 ** (j - 1)));
+    a = konv(a, upsample(H, 2 ** (j - 1)));
+    const w = new Float64Array(n), aa = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      w[i] = SGN[j - 1] * y[clip(i + pad + Tmax - D[j - 1], 0, y.length - 1)];
+      aa[i] = a[clip(i + pad + DA[j - 1], 0, a.length - 1)];
+    }
+    Wj.push(w); Aj.push(aa);
+  }
+  return returnA ? [Wj, Aj] : Wj;
+}
+
+/* ===================== DETEKSI ===================== */
+function absMax(w) { let m = 0; for (let i = 0; i < w.length; i++) { const v = Math.abs(w[i]); if (v > m) m = v; } return m; }
+function argmaxRange(a, lo, hi, sgn) {          // argmax sgn*a[lo..hi-1], hasil pertama
+  let bi = lo, bv = -Infinity; for (let i = lo; i < hi; i++) { const v = sgn * a[i]; if (v > bv) { bv = v; bi = i; } } return bi;
+}
+function argmaxAbs(a, lo, hi) { let bi = lo, bv = -1; for (let i = lo; i < hi; i++) { const v = Math.abs(a[i]); if (v > bv) { bv = v; bi = i; } } return bi; }
+
+function zcPairs(w, thr, win) {
+  const ext = [];
+  for (let i = 1; i < w.length - 1; i++) {
+    if (w[i] > w[i - 1] && w[i] >= w[i + 1] && w[i] > thr) ext.push([i, 1]);
+    else if (w[i] < w[i - 1] && w[i] <= w[i + 1] && w[i] < -thr) ext.push([i, -1]);
+  }
+  const out = [];
+  for (let k = 0; k + 1 < ext.length; k++) {
+    const [i1, s1] = ext[k], [i2, s2] = ext[k + 1];
+    if (s1 !== s2 && i2 - i1 <= win) {
+      let kk = -1; for (let t = i1; t <= i2; t++) if (w[t] * s1 <= 0) { kk = t - i1; break; }
+      let z = i1 + (kk >= 0 ? kk : (i2 - i1) >> 1);
+      if (z > i1 && Math.abs(w[z - 1]) < Math.abs(w[z])) z -= 1;
+      out.push({ z, e1: i1, e2: i2, sign: s1, amp: Math.abs(w[i1]) + Math.abs(w[i2]) });
+    }
+  }
+  return out;
+}
+
+function bestPeak(w, a, b, thr) {
+  a = Math.max(a, 1); b = Math.min(b, w.length - 2);
+  if (b - a < 4) return null;
+  const idx = [];
+  for (let k = a; k < b; k++) if (Math.sign(w[k]) * Math.sign(w[k + 1]) < 0) idx.push(k);
+  if (!idx.length) return null;
+  const edges = [a, ...idx, b]; let best = null;
+  for (let t = 0; t < idx.length; t++) {
+    const z = idx[t], l = edges[t], r = edges[t + 2];
+    const li = argmaxAbs(w, l, z + 1), ri = argmaxAbs(w, z + 1, r + 1);
+    const al = Math.abs(w[li]), ar = Math.abs(w[ri]);
+    if (Math.min(al, ar) >= thr && (best === null || al + ar > best.score)) {
+      const zz = Math.abs(w[z]) <= Math.abs(w[z + 1]) ? z : z + 1;
+      best = { z: zz, e1: li, e2: ri, sign: w[li] > 0 ? 1 : -1, score: al + ar };
+    }
+  }
+  return best;
+}
+function refine(A, b) {                         // ekstremum sinyal aproksimasi di antara modulus maxima-minima
+  let bi = b.e1, bv = b.sign === 1 ? -Infinity : Infinity;
+  for (let i = b.e1; i <= b.e2; i++) { if (b.sign === 1 ? A[i] > bv : A[i] < bv) { bv = A[i]; bi = i; } }
+  return bi;
+}
+
+function detect(x, fs, Wj, P, T, D) {
+  const ms = v => Math.round(v * fs / 1000), n = x.length;
+  const w3 = Wj[2], w4 = Wj[3];
+  const res = { R: [], Q: [], S: [], P: [], T: [], boxR: [], boxP: [], boxT: [], zc: { Q: [], S: [], R: [], P: [], T: [] },
+    pol: 1, thr4: 0, thr5: 0, thr6: 0, pairsR: [], w5: Wj[4], w6: Wj[5] };
+  // ---- R : zero-crossing skala 4 (AND skala 3)
+  const thr4 = P.ThR * absMax(w4); res.thr4 = thr4;
+  let pr = zcPairs(w4, thr4, ms(100)); if (!pr.length) return res;
+  const npos = pr.filter(p => p.sign === 1).length; const pol = npos >= pr.length - npos ? 1 : -1; res.pol = pol;
+  pr = pr.filter(p => p.sign === pol);
+  const z3 = zcPairs(w3, P.ThR * 0.5 * absMax(w3), ms(100)).filter(p => p.sign === pol).map(p => p.z);
+  pr = pr.filter(p => z3.length && Math.min(...z3.map(z => Math.abs(z - p.z))) <= ms(25));
+  pr.sort((a, b) => a.z - b.z);
+  const sel = [];
+  for (const p of pr) {
+    if (sel.length && p.z - sel[sel.length - 1].z < ms(P.Refr)) { if (p.amp > sel[sel.length - 1].amp) sel[sel.length - 1] = p; }
+    else sel.push(p);
+  }
+  const R = sel.map(p => { const a = Math.max(p.z - ms(30), 0), b = Math.min(p.z + ms(30), n); return argmaxRange(x, a, b, pol); });
+  res.R = R; res.pairsR = sel; res.zc.R = sel.map(p => p.z); res.boxR = sel.map(p => [p.e1, p.e2]);
+  // ---- Q dan S : zero-crossing skala 3
+  const wq = w3.map(v => pol * v), Qs = [], Ss = [];
+  for (const r of R) {
+    const sa = Math.max(r - ms(60), 0); const pm = argmaxRange(wq, sa, r + 1, 1);
+    let q = null;
+    for (let k = pm; k > Math.max(r - ms(80), 1); k--) if (wq[k - 1] < 0 && 0 <= wq[k]) { q = k; break; }
+    if (q === null || q >= r) q = argmaxRange(x, sa, r + 1, -pol);
+    res.zc.Q.push(q);
+    const qa = Math.max(q - 2, 0); q = argmaxRange(x, qa, Math.min(q + 3, n), -pol);
+    const sb = Math.min(r + ms(60), n - 1); const nm = argmaxRange(wq, r, sb + 1, -1);
+    let s = null;
+    for (let k = nm + 1; k < Math.min(r + ms(100), n - 1); k++) if (wq[k - 1] < 0 && 0 <= wq[k]) { s = k; break; }
+    if (s === null || s <= r) s = argmaxRange(x, r, sb + 1, -pol);
+    res.zc.S.push(s);
+    const sa2 = Math.max(s - 2, 0); s = argmaxRange(x, sa2, Math.min(s + 3, n), -pol);
+    Qs.push(q); Ss.push(s);
+  }
+  res.Q = Qs; res.S = Ss;
+  // ---- QRS dipotong (interpolasi linear), DWT ulang untuk skala 5-6
+  const xc = Float64Array.from(x);
+  for (let i = 0; i < Qs.length; i++) {
+    const a = Math.max(Qs[i] - ms(10), 0), b = Math.min(Ss[i] + ms(20), n - 1);
+    for (let k = a; k <= b; k++) xc[k] = b > a ? xc[a] + (xc[b] - xc[a]) * (k - a) / (b - a) : xc[a];
+  }
+  const [Wc, Ac] = mallat(xc, T, D, true); const w5 = Wc[4], w6 = Wc[5]; res.w5 = w5; res.w6 = w6;
+  const mask = new Uint8Array(n).fill(1);
+  for (const r of R) for (let k = Math.max(r - ms(100), 0); k < Math.min(r + ms(100), n); k++) mask[k] = 0;
+  const refv = w => { let m = 0, any = false; for (let i = 0; i < n; i++) if (mask[i]) { any = true; m = Math.max(m, Math.abs(w[i])); } return any ? m : absMax(w); };
+  res.thr5 = P.ThP * refv(w5); res.thr6 = P.ThT * refv(w6);
+  // ---- T (skala 6) lalu P (skala 5)
+  const Ts = new Array(R.length).fill(null);
+  for (let i = 0; i < R.length; i++) {
+    const r = R[i]; const ta = Ss[i] + ms(30); let tb = r + ms(P.Twin);
+    if (i + 1 < R.length) tb = Math.min(tb, Math.floor((r + R[i + 1]) / 2));
+    const b = bestPeak(w6, ta, tb, res.thr6);
+    if (b) { res.zc.T.push(b.z); res.boxT.push([b.e1, b.e2]); Ts[i] = refine(Ac[4], b); }
+  }
+  for (let i = 0; i < R.length; i++) {
+    const r = R[i]; const pb = Qs[i] - ms(15); let pa = r - ms(P.Pwin);
+    if (i > 0) pa = Math.max(pa, Ts[i - 1] !== null ? Ts[i - 1] + ms(40) : Math.floor((R[i - 1] + r) / 2));
+    const b = bestPeak(w5, pa, pb, res.thr5);
+    if (b) { res.P.push(refine(Ac[3], b)); res.zc.P.push(b.z); res.boxP.push([b.e1, b.e2]); }
+  }
+  res.T = Ts.filter(t => t !== null);
+  return res;
+}
+function evaluate(R, ref, fs, tol = 0.08) {
+  if (!R.length || !ref.length) return null; const t = Math.floor(tol * fs);
+  const se = ref.filter(b => R.some(r => Math.abs(r - b) <= t)).length / ref.length;
+  const ppv = R.filter(r => ref.some(b => Math.abs(r - b) <= t)).length / R.length; return [se, ppv];
+}
+function analyze(x, fs, ref, P, T, D) {
+  const Wj = mallat(x, T, D); const res = detect(x, fs, Wj, P, T, D);
+  Object.assign(res, { x, fs, Wj, ref, off: P.Start, metric: evaluate(res.R, ref, fs) }); return res;
+}
+
+/* ===================== BACA FILE PHYSIONET ===================== */
+function parseHea(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('#'));
+  const f = lines[0].trim().split(/\s+/); const nsig = parseInt(f[1]); const fs = parseFloat(f[2]); const ns = parseInt(f[3]);
+  const sigs = [];
+  for (let i = 1; i <= nsig; i++) {
+    const p = lines[i].trim().split(/\s+/); const gs = p[2] || '200';
+    const gain = parseFloat(gs) || 200; const mb = gs.match(/\((-?\d+)\)/);
+    const adcZero = p[4] !== undefined ? parseInt(p[4]) : 0;
+    sigs.push({ file: p[0], fmt: parseInt(p[1]), gain, baseline: mb ? parseInt(mb[1]) : adcZero, name: p.slice(8).join(' ') || ('ch' + (i - 1)) });
+  }
+  return { name: f[0], nsig, fs, ns, sigs };
+}
+function readSignal(buf, hdr, ch, start, n) {
+  const u8 = new Uint8Array(buf), sg = hdr.sigs[ch], nsig = hdr.nsig, out = new Float64Array(n);
+  const get = i => {                                   // i = indeks sampel dalam aliran ber-interleave
+    if (sg.fmt === 212) {
+      const t = (i >> 1) * 3; if (t + 2 >= u8.length) return null;
+      let v; if ((i & 1) === 0) v = u8[t] | ((u8[t + 1] & 0x0F) << 8); else v = u8[t + 2] | ((u8[t + 1] & 0xF0) << 4);
+      return v > 2047 ? v - 4096 : v;
+    }
+    if (sg.fmt === 16) { const t = i * 2; if (t + 1 >= u8.length) return null; const v = u8[t] | (u8[t + 1] << 8); return v > 32767 ? v - 65536 : v; }
+    throw new Error('Format .dat ' + sg.fmt + ' belum didukung (hanya 212 dan 16)');
+  };
+  for (let k = 0; k < n; k++) { const v = get((start + k) * nsig + ch); if (v === null) throw new Error('Data .dat lebih pendek dari NData/Start'); out[k] = (v - sg.baseline) / sg.gain; }
+  return out;
+}
+const BEAT_CODES = new Set([1, 2, 3, 26, 8, 4, 7, 9, 5, 42, 6, 35, 11, 36, 10, 12, 39, 13, 31]);   // N L R B A a J S V r F e j n E / f Q ?
+function parseAtr(buf) {
+  const dv = new DataView(buf); const out = []; let t = 0, i = 0;
+  while (i + 1 < buf.byteLength) {
+    const w = dv.getUint16(i, true); i += 2; const code = w >> 10, tm = w & 0x3FF;
+    if (w === 0) break;
+    if (code === 59) { const hi = dv.getUint16(i, true), lo = dv.getUint16(i + 2, true); i += 4; t += hi * 65536 + lo; }
+    else if (code === 63) { i += tm + (tm & 1); }
+    else if (code === 60 || code === 61 || code === 62) { /* NUM / SUB / CHN */ }
+    else { t += tm; out.push([t, code]); }
+  }
+  return out;
+}
+window.ECG = { mallat, detect, analyze, parseHea, readSignal, parseAtr, T_auto, D_auto, Q, h_db4, g_db4, zcPairs, bestPeak, BEAT_CODES, Tmax_auto };
+/* ===================== PLOT (canvas, tanpa library) ===================== */
+const COL = { P: '#2ca02c', Q: '#1f77b4', R: '#d62728', S: '#9467bd', T: '#8c564b' };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function niceTicks(lo, hi, n) {
+  const span = hi - lo || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), nm = step0 / mag;
+  const step = (nm < 1.5 ? 1 : nm < 3 ? 2 : nm < 7 ? 5 : 10) * mag, out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return { ticks: out, step };
+}
+const fmt = (v, step) => step >= 1 ? String(Math.round(v)) : v.toFixed(Math.min(4, Math.max(0, -Math.floor(Math.log10(step)))));
+
+const ML = 54, MR = 12;
+function drawPanel(ctx, r, p, view) {
+  const leg = [];
+  for (const s of p.series || []) if (s.label) leg.push([s.label, s.color]);
+  for (const m of p.marks || []) if (m.label) leg.push([m.label, m.color]);
+  for (const s of p.spans || []) if (s.label && !leg.some(l => l[0] === s.label)) leg.push([s.label, s.color]);
+  const L = r.x + ML, Rr = r.x + r.w - MR, T = r.y + (leg.length ? 34 : 20), B = r.y + r.h - (p.showX ? 32 : 6);
+  const fg = css('--fg'), grid = css('--grid');
+  let x0, x1;
+  if (p.xlim) [x0, x1] = p.xlim; else [x0, x1] = view;
+  // rentang y dari data yang terlihat
+  let lo = Infinity, hi = -Infinity;
+  const take = (xs, ys, off) => { for (let i = 0; i < ys.length; i++) { const xv = xs ? xs[i] : i + off; if (xv < x0 || xv > x1) continue; const v = ys[i]; if (v < lo) lo = v; if (v > hi) hi = v; } };
+  for (const s of p.series || []) take(s.x, s.y, p.off || 0);
+  if (p.ylim) [lo, hi] = p.ylim;
+  if (!isFinite(lo)) { lo = -1; hi = 1; }
+  for (const h of p.hlines || []) { lo = Math.min(lo, h.y); hi = Math.max(hi, h.y); }
+  if (hi - lo < 1e-12) { hi += 1; lo -= 1; }
+  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+  const X = v => L + (v - x0) / (x1 - x0) * (Rr - L), Y = v => B - (v - lo) / (hi - lo) * (B - T);
+  ctx.save(); ctx.font = '11px system-ui,sans-serif'; ctx.fillStyle = fg; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(p.title || '', L, r.y + 13);
+  if (p.text) { ctx.strokeStyle = grid; ctx.strokeRect(L, T, Rr - L, B - T); ctx.textAlign = 'left'; ctx.font = '11px ui-monospace,monospace'; p.text.forEach((s, i) => ctx.fillText(s, L + 8, T + 18 + i * 15)); ctx.restore(); return; }
+  // grid + tick
+  const yt = niceTicks(lo, hi, 4), xt = niceTicks(x0, x1, Math.max(3, Math.floor((Rr - L) / 90)));
+  ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.textAlign = 'right';
+  for (const v of yt.ticks) { const y = Y(v); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(Rr, y); ctx.stroke(); ctx.fillText(fmt(v, yt.step), L - 5, y + 4); }
+  ctx.textAlign = 'center';
+  for (const v of xt.ticks) { const x = X(v); ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, B); ctx.stroke(); if (p.showX) ctx.fillText(fmt(v, xt.step), x, B + 13); }
+  ctx.strokeStyle = fg; ctx.strokeRect(L, T, Rr - L, B - T);
+  if (p.showX && p.xlabel) { ctx.fillText(p.xlabel, (L + Rr) / 2, r.y + r.h - 4); }
+  ctx.beginPath(); ctx.rect(L, T, Rr - L, B - T); ctx.clip();
+  for (const s of p.spans || []) { ctx.globalAlpha = 0.25; ctx.fillStyle = s.color; ctx.fillRect(X(s.a), T, Math.max(1, X(s.b) - X(s.a)), B - T); }
+  ctx.globalAlpha = 1;
+  for (const h of p.hlines || []) { ctx.strokeStyle = h.color || fg; ctx.setLineDash(h.dash ? [5, 4] : []); ctx.lineWidth = h.dash ? 1 : 0.7; ctx.beginPath(); ctx.moveTo(L, Y(h.y)); ctx.lineTo(Rr, Y(h.y)); ctx.stroke(); }
+  ctx.setLineDash([]);
+  for (const s of p.series || []) {
+    ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.lw || 1;
+    if (s.type === 'stem') {
+      for (let i = 0; i < s.y.length; i++) { const xx = X(s.x ? s.x[i] : i), yy = Y(s.y[i]); ctx.beginPath(); ctx.moveTo(xx, Y(0)); ctx.lineTo(xx, yy); ctx.stroke(); ctx.beginPath(); ctx.arc(xx, yy, 3, 0, 7); ctx.fill(); }
+    } else {
+      ctx.beginPath(); let first = true;
+      for (let i = 0; i < s.y.length; i++) { const xv = s.x ? s.x[i] : i + (p.off || 0); if (xv < x0 - 2 && !(s.x)) { if (xv < x0 - 2) continue; } if (xv > x1 + 2 && !s.x) break;
+        const xx = X(xv), yy = Y(s.y[i]); if (first) { ctx.moveTo(xx, yy); first = false; } else ctx.lineTo(xx, yy); }
+      ctx.stroke();
+    }
+  }
+  for (const m of p.marks || []) {
+    ctx.fillStyle = m.color; ctx.strokeStyle = m.color;
+    for (let i = 0; i < m.x.length; i++) {
+      const xx = X(m.x[i]), yy = Y(m.y[i]); if (xx < L - 5 || xx > Rr + 5) continue;
+      if (m.shape === 'x') { ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(xx - 4, yy - 4); ctx.lineTo(xx + 4, yy + 4); ctx.moveTo(xx + 4, yy - 4); ctx.lineTo(xx - 4, yy + 4); ctx.stroke(); }
+      else if (m.shape === 'tri') { ctx.beginPath(); ctx.moveTo(xx, yy - 5); ctx.lineTo(xx + 4, yy + 3); ctx.lineTo(xx - 4, yy + 3); ctx.fill(); }
+      else { ctx.beginPath(); ctx.arc(xx, yy, 4, 0, 7); ctx.fill(); }
+      if (m.text) { ctx.font = 'bold 12px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillText(m.text, xx, yy + (m.below ? 16 : -8)); }
+    }
+  }
+  ctx.restore();
+  // legenda (baris di bawah judul)
+  ctx.save(); ctx.font = '11px system-ui,sans-serif'; ctx.textAlign = 'left'; let lx = L;
+  for (let i = 0; i < leg.length; i++) { ctx.fillStyle = leg[i][1]; ctx.fillRect(lx, r.y + 20, 10, 8); ctx.fillStyle = fg; ctx.fillText(leg[i][0], lx + 13, r.y + 28); lx += ctx.measureText(leg[i][0]).width + 26; }
+  ctx.restore();
+}
+
+function render(canvas, panels, view, cols, rowH) {
+  const dpr = window.devicePixelRatio || 1, cssW = canvas.parentElement.clientWidth - 4;
+  const rows = Math.ceil(panels.length / cols), cssH = rows * rowH;
+  canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px'; canvas.width = Math.floor(cssW * dpr); canvas.height = Math.floor(cssH * dpr);
+  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cssW, cssH);
+  ctx.fillStyle = css('--plot'); ctx.fillRect(0, 0, cssW, cssH);
+  const cw = cssW / cols; canvas._geom = { cols, rowH, cssW, n: panels.length };
+  panels.forEach((p, i) => { const c = i % cols, rI = Math.floor(i / cols); drawPanel(ctx, { x: c * cw, y: rI * rowH, w: cw, h: rowH }, p, view); });
+}
+
+/* ===================== MODEL TAB ===================== */
+const nOf = res => res.x.length;
+function sampleX(res) { return res.off; }
+function tab_input(res) {
+  const p = { title: `Input - ${res.name} (fs=${res.fs} Hz, N=${nOf(res)})`, off: res.off, showX: true, xlabel: 'sampel (n)', series: [{ y: res.x, color: '#1f77b4', label: 'ECG (mV)' }], marks: [] };
+  if (res.ref.length) p.marks.push({ x: res.ref.map(i => i + res.off), y: res.ref.map(i => res.x[i]), color: '#2e7d32', shape: 'x', label: 'anotasi .atr' });
+  return { panels: [p], cols: 1, rowH: 340, zoom: true };
+}
+function tab_mallat(res) {
+  const P = [{ title: 'x (sinyal)  |  W_j = x * Q_j (Mallat db4, a trous), sudah disejajarkan: T_j + Delay_j = Tmax', off: res.off, series: [{ y: res.x, color: '#1f77b4' }] }];
+  res.Wj.forEach((w, j) => P.push({ title: 'Q' + (j + 1), off: res.off, series: [{ y: w, color: '#7e57c2' }] }));
+  P[P.length - 1].showX = true; P[P.length - 1].xlabel = 'sampel (n)';
+  return { panels: P, cols: 1, rowH: 92, zoom: true };
+}
+function tab_filter(res) {
+  const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
+  const idx = h_db4.map((_, i) => i);
+  const respF = (f, K) => { const out = new Float64Array(K), xs = new Float64Array(K); for (let k = 0; k < K; k++) { const w = Math.PI * k / (K - 1); let re = 0, im = 0; for (let n = 0; n < f.length; n++) { re += f[n] * Math.cos(w * n); im -= f[n] * Math.sin(w * n); } out[k] = Math.hypot(re, im); xs[k] = w / Math.PI; } return [xs, out]; };
+  const [wx, hm] = respF(h_db4, 200), [, gm] = respF(g_db4, 200);
+  const qs = Q.map((q, j) => { const K = 240, xs = new Float64Array(K), ys = new Float64Array(K); for (let k = 0; k < K; k++) { const w = Math.PI * k / (K - 1); let re = 0, im = 0; for (let n = 0; n < q.length; n++) { re += q[n] * Math.cos(w * n); im -= q[n] * Math.sin(w * n); } ys[k] = Math.hypot(re, im); xs[k] = w / Math.PI * res.fs / 2; } return { x: xs, y: ys, color: colors[j], label: 'Q' + (j + 1), lw: 1.2 }; });
+  const sum = a => a.reduce((s, v) => s + v, 0);
+  const panels = [
+    { title: 'h[n]  (LPF db4)', xlim: [-0.5, 7.5], showX: true, series: [{ x: idx, y: h_db4, color: '#1f77b4', type: 'stem' }], hlines: [{ y: 0 }] },
+    { title: 'g[n] = (-1)^n h[L-1-n]  (HPF)', xlim: [-0.5, 7.5], showX: true, series: [{ x: idx, y: g_db4, color: '#ff7f0e', type: 'stem' }], hlines: [{ y: 0 }] },
+    { title: 'Respons frekuensi (sumbu = w/pi)', xlim: [0, 1], showX: true, series: [{ x: wx, y: hm, color: '#1f77b4', label: '|H|' }, { x: wx, y: gm, color: '#ff7f0e', label: '|G|' }] },
+    { title: '|Q_j(f)|  ekuivalen filter bank (Hz)', xlim: [0, res.fs / 2], showX: true, series: qs },
+    { title: 'Impuls respons Q1..Q4 (j1..j4)', xlim: [0, Q[3].length], showX: true, series: Q.slice(0, 4).map((q, j) => ({ y: q, color: colors[j], label: 'Q' + (j + 1) })) },
+    { title: 'Pemeriksaan koefisien db4', showX: false, xlim: [0, 1], text: [
+      'sum h   = ' + sum(h_db4).toFixed(6) + ' (sqrt2)', 'sum h^2 = ' + sum(h_db4.map(v => v * v)).toFixed(6) + ' (1)', 'sum g   = ' + sum(g_db4).toFixed(6) + ' (0)', '',
+      'T_j:', '[' + T_auto.join(',') + ']', 'Delay_j:', '[' + D_auto.join(',') + ']'] }];
+  return { panels, cols: 3, rowH: 270, zoom: false };
+}
+function tab_zero(res) {
+  const o = res.off, W = res.Wj, mk = (k, w, idx) => ({ x: idx.map(i => i + o), y: idx.map(i => w[i]), color: COL[k], label: 'zero-cross ' + k });
+  const P = [
+    { title: 'Q3 : zero-crossing Q & S', off: o, series: [{ y: W[2], color: '#7e57c2' }], hlines: [{ y: 0 }], marks: [mk('Q', W[2], res.zc.Q), mk('S', W[2], res.zc.S)] },
+    { title: 'Q4 : zero-crossing R (+ ambang ThR)', off: o, series: [{ y: W[3], color: '#7e57c2' }], hlines: [{ y: 0 }, { y: res.thr4, dash: 1, color: '#d62728' }, { y: -res.thr4, dash: 1, color: '#d62728' }], marks: [mk('R', W[3], res.zc.R)] },
+    { title: 'Q5 : zero-crossing P (setelah QRS dipotong)', off: o, series: [{ y: res.w5, color: '#7e57c2' }], hlines: [{ y: 0 }, { y: res.thr5, dash: 1, color: '#d62728' }, { y: -res.thr5, dash: 1, color: '#d62728' }], marks: [mk('P', res.w5, res.zc.P)] },
+    { title: 'Q6 : zero-crossing T (setelah QRS dipotong)', off: o, series: [{ y: res.w6, color: '#7e57c2' }], hlines: [{ y: 0 }, { y: res.thr6, dash: 1, color: '#d62728' }, { y: -res.thr6, dash: 1, color: '#d62728' }], marks: [mk('T', res.w6, res.zc.T)], showX: true, xlabel: 'sampel (n)' }];
+  return { panels: P, cols: 1, rowH: 190, zoom: true };
+}
+function tab_gradient(res) {
+  const grad = a => { const g = new Float64Array(a.length); for (let i = 1; i < a.length - 1; i++) g[i] = (a[i + 1] - a[i - 1]) / 2; g[0] = a[1] - a[0]; g[a.length - 1] = a[a.length - 1] - a[a.length - 2]; return g; };
+  const w4 = res.Wj[3], gw = grad(w4).map(v => v * 5), o = res.off;
+  const P = [
+    { title: 'Sinyal ECG', off: o, series: [{ y: res.x, color: '#1f77b4' }] },
+    { title: 'Gradien sinyal: dx/dn', off: o, series: [{ y: grad(res.x), color: '#2ca02c' }] },
+    { title: 'Koefisien Q4, gradiennya (x5), dan modulus maxima-minima pasangan R', off: o, showX: true, xlabel: 'sampel (n)', hlines: [{ y: 0 }],
+      series: [{ y: w4, color: '#7e57c2', label: 'W4 (Q4)' }, { y: gw, color: '#ff7f0e', label: 'gradien W4 (x5)' }],
+      marks: [{ x: res.pairsR.flatMap(p => [p.e1 + o, p.e2 + o]), y: res.pairsR.flatMap(p => [w4[p.e1], w4[p.e2]]), color: '#000', shape: 'tri', label: 'modulus maxima/minima' }] }];
+  return { panels: P, cols: 1, rowH: 230, zoom: true };
+}
+function tab_detect(res) {
+  const o = res.off, spans = [];
+  res.boxR.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#ff9800', label: 'pulsa QRS (Q4)' }));
+  res.boxP.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#2ca02c', label: 'pulsa P (Q5)' }));
+  res.boxT.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#00bcd4', label: 'pulsa T (Q6)' }));
+  const marks = [];
+  for (const k of 'PQRST') { const ix = res[k]; if (ix.length) marks.push({ x: ix.map(i => i + o), y: ix.map(i => res.x[i]), color: COL[k], text: k, label: k, below: (k === 'Q' || k === 'S') && res.pol > 0 }); }
+  if (res.ref.length) marks.push({ x: res.ref.map(i => i + o), y: res.ref.map(i => res.x[i]), color: '#2e7d32', shape: 'x', label: 'anotasi .atr' });
+  let ttl = 'Deteksi P Q R S T - DWT db4 (from scratch)';
+  if (res.metric) ttl += `   |   R vs .atr: Se=${(res.metric[0] * 100).toFixed(1)}%  PPV=${(res.metric[1] * 100).toFixed(1)}%`;
+  return { panels: [{ title: ttl, off: o, showX: true, xlabel: 'sampel (n)', series: [{ y: res.x, color: css('--fg'), lw: 1.1 }], spans, marks }], cols: 1, rowH: 460, zoom: true };
+}
+const TABS = [['Prosses', tab_input], ['Mallat', tab_mallat], ['Filter Bank', tab_filter], ['Zero-cross', tab_zero], ['Gradient', tab_gradient], ['Detection', tab_detect]];
+
+/* ===================== UI / STATE ===================== */
+const $ = id => document.getElementById(id);
+const state = { files: {}, hdr: null, atr: null, res: null, tab: 5, views: {}, demo: null };
+
+function buildFields() {
+  const mk = (cls, prefix, arr) => { const box = $(cls); box.innerHTML = ''; arr.forEach((v, j) => { const l = document.createElement('label'); l.innerHTML = `${prefix}${j + 1}<input type="number" id="${cls}${j}" value="${v}">`; box.appendChild(l); }); };
+  mk('T', 'T', T_auto); mk('D', 'Delay', D_auto);
+}
+function readNums(prefix) { return Array.from({ length: JMAX }, (_, j) => parseInt($(prefix + j).value)); }
+function setStatus(msg, err) { const s = $('status'); s.textContent = msg; s.className = err ? 'err' : ''; }
+
+const readAB = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); r.readAsArrayBuffer(f); });
+async function onFiles(list) {
+  state.files = {}; state.demo = null;
+  for (const f of list) { const ext = f.name.split('.').pop().toLowerCase(); if (['hea', 'dat', 'atr'].includes(ext)) state.files[ext] = f; }
+  const got = Object.keys(state.files).sort().join(', ');
+  $('fileinfo').textContent = got ? 'File: ' + got : 'Belum ada file';
+  if (!state.files.hea || !state.files.dat) { setStatus('Butuh minimal .hea dan .dat (+ .atr untuk anotasi)', true); return; }
+  try { state.hdr = parseHea(new TextDecoder().decode(await readAB(state.files.hea))); } catch (e) { setStatus('Gagal baca .hea: ' + e.message, true); return; }
+  state.datBuf = await readAB(state.files.dat);
+  state.atr = state.files.atr ? parseAtr(await readAB(state.files.atr)) : null;
+  $('rec').value = state.hdr.name + ' (' + state.hdr.sigs.map(s => s.name).join(', ') + ')';
+  setStatus('File siap: ' + state.hdr.name + ', fs=' + state.hdr.fs + ' Hz, ' + state.hdr.ns + ' sampel. Klik Action.');
+}
+
+function demoSignal(n, fs) {
+  const x = new Float64Array(n), g = (t, c, a, w) => a * Math.exp(-((t - c) ** 2) / (2 * w * w)); let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - .5; };
+  for (let i = 0; i < n; i++) { const t = i / fs; let v = 0.2 * Math.sin(2 * Math.PI * 0.3 * t) + 0.02 * rnd();
+    for (let c = 0.5; c < n / fs; c += 0.83) v += g(t, c - .18, .15, .025) + g(t, c - .03, -.12, .008) + g(t, c, 1.2, .01) + g(t, c + .03, -.2, .01) + g(t, c + .26, .3, .05);
+    x[i] = v; }
+  return x;
+}
+
+function action() {
+  try {
+    const nd = parseInt($('nd').value), st = parseInt($('st').value), ch = parseInt($('ch').value) || 0; let x, fs, ref = [], name;
+    if (state.demo) { fs = 360; x = state.demo.slice(st, st + nd); name = 'DEMO sintetis'; }
+    else {
+      if (!state.hdr) { setStatus('Pilih file .hea, .dat, .atr dulu (atau klik Demo)', true); return; }
+      const hd = state.hdr; if (ch >= hd.nsig) throw new Error('Channel maksimal ' + (hd.nsig - 1));
+      const n = Math.min(nd, hd.ns - st); if (n < 200) throw new Error('NData/Start di luar panjang rekaman (' + hd.ns + ' sampel)');
+      x = readSignal(state.datBuf, hd, ch, st, n); fs = hd.fs; name = hd.sigs[ch].name;
+      if (state.atr) ref = state.atr.filter(a => BEAT_CODES.has(a[1]) && a[0] >= st && a[0] < st + n).map(a => a[0] - st);
+    }
+    if (x.length < 400) throw new Error('Sinyal terlalu pendek (minimal sekitar 400 sampel)');
+    let T = T_auto, D = D_auto;
+    if ($('auto').checked) { T_auto.forEach((v, j) => { $('T' + j).value = v; $('D' + j).value = D_auto[j]; }); } else { T = readNums('T'); D = readNums('D'); }
+    const P = { ThR: +$('thR').value, ThP: +$('thP').value, ThT: +$('thT').value, Refr: +$('refr').value, Pwin: +$('pw').value, Twin: +$('tw').value, Start: st };
+    state.res = analyze(Float64Array.from(x), fs, ref, P, T, D); state.res.name = name; state.views = {};
+    setStatus('OK  fs=' + fs + ' Hz  N=' + x.length + (ref.length ? '  anotasi=' + ref.length : '')); draw();
+  } catch (e) { setStatus('ERROR: ' + e.message, true); console.error(e); }
+}
+
+function updateStats(res) {
+  const box = $('stats-box');
+  if (!res || !res.R || res.R.length < 2) {
+    if (box) box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  // Hitung interval RR rata-rata dalam detik
+  const rIdx = res.R;
+  let totalRR = 0;
+  for (let i = 1; i < rIdx.length; i++) {
+    totalRR += (rIdx[i] - rIdx[i - 1]) / res.fs;
+  }
+  const meanRR = totalRR / (rIdx.length - 1);
+  const bpm = Math.round(60 / meanRR);
+  let status = 'Normal (60-100)';
+  if (bpm < 60) status = 'Bradikardia (<60)';
+  else if (bpm > 100) status = 'Takikardia (>100)';
+  
+  $('stat-bpm').textContent = `BPM: ${bpm} (${status})`;
+  $('stat-beats').textContent = `Detak: ${res.R.length} beats / ${(res.x.length / res.fs).toFixed(2)} detik`;
+  if (res.metric) {
+    $('stat-acc').textContent = `Akurasi: Se=${(res.metric[0] * 100).toFixed(1)}% | PPV=${(res.metric[1] * 100).toFixed(1)}%`;
+  } else {
+    $('stat-acc').textContent = `Akurasi: Tidak ada ref .atr`;
+  }
+}
+
+function draw() {
+  const res = state.res; if (!res) return;
+  const [, fn] = TABS[state.tab]; const t = fn(res), cv = $('cv');
+  state.cur = t; const full = [res.off, res.off + res.x.length - 1];
+  if (!state.views[state.tab]) state.views[state.tab] = full.slice(); t.full = full;
+  render(cv, t.panels, t.zoom ? state.views[state.tab] : full, t.cols, t.rowH);
+  let info = '';
+  if (state.tab === 5) {
+    const L = k => k + ' (' + res[k].length + '): ' + res[k].map(i => i + res.off).join(', ');
+    info = ['R', 'Q', 'S', 'P', 'T'].map(L).join('\n');
+    if (res.R.length >= 2) {
+      const rr = [];
+      for (let i = 1; i < res.R.length; i++) {
+        rr.push(((res.R[i] - res.R[i - 1]) / res.fs * 1000).toFixed(0) + 'ms');
+      }
+      info += '\n\nInterval RR: ' + rr.join(', ');
+    }
+  }
+  $('info').textContent = info; $('hint').textContent = t.zoom ? 'Scroll = zoom, seret = geser, klik ganda = reset' : '';
+  updateStats(res);
+}
+
+function resetDefaults() {
+  $('thR').value = 0.4;
+  $('thP').value = 0.15;
+  $('thT').value = 0.2;
+  $('refr').value = 200;
+  $('pw').value = 300;
+  $('tw').value = 450;
+  $('auto').checked = true;
+  T_auto.forEach((v, j) => { $('T' + j).value = v; $('D' + j).value = D_auto[j]; });
+  setStatus('Pengaturan dikembalikan ke nilai default.');
+  if (state.res || state.hdr || state.demo) action();
+}
+
+function exportToCSV() {
+  const res = state.res;
+  if (!res || !res.R || !res.R.length) {
+    alert('Belum ada data hasil analisis untuk diunduh.');
+    return;
+  }
+  let csv = 'No,Beat_Index,Sample_R,Sample_Q,Sample_S,Sample_P,Sample_T,RR_Interval_ms\n';
+  const o = res.off;
+  for (let i = 0; i < res.R.length; i++) {
+    const r = res.R[i] !== undefined ? res.R[i] + o : '-';
+    const q = res.Q && res.Q[i] !== undefined ? res.Q[i] + o : '-';
+    const s = res.S && res.S[i] !== undefined ? res.S[i] + o : '-';
+    const p = res.P && res.P[i] !== undefined ? res.P[i] + o : '-';
+    const t = res.T && res.T[i] !== undefined ? res.T[i] + o : '-';
+    let rr = '-';
+    if (i > 0 && res.R[i] !== undefined && res.R[i - 1] !== undefined) {
+      rr = ((res.R[i] - res.R[i - 1]) / res.fs * 1000).toFixed(1);
+    }
+    csv += `${i + 1},${i + 1},${r},${q},${s},${p},${t},${rr}\n`;
+  }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hasil_deteksi_ekg_${res.name || 'data'}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function initUI() {
+  buildFields();
+  $('tabs').innerHTML = ''; TABS.forEach(([n], i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { state.tab = i; document.querySelectorAll('#tabs button').forEach((x, k) => x.classList.toggle('on', k === i)); draw(); }; if (i === state.tab) b.className = 'on'; $('tabs').appendChild(b); });
+  $('files').onchange = e => onFiles(e.target.files); $('go').onclick = action;
+  $('reset-btn').onclick = resetDefaults;
+  $('export-csv-btn').onclick = exportToCSV;
+  $('demo').onclick = () => { $('st').value = 0; $('nd').value = 999; state.demo = demoSignal(4000, 360); state.hdr = null; $('rec').value = 'DEMO sintetis'; $('fileinfo').textContent = 'Mode demo (tanpa file)'; action(); };
+  const cv = $('cv'); let drag = null;
+  cv.onwheel = e => { const t = state.cur; if (!t || !t.zoom) return; e.preventDefault(); const v = state.views[state.tab], rect = cv.getBoundingClientRect(), W = rect.width - ML - MR;
+    const f = Math.min(1, Math.max(0, (e.clientX - rect.left - ML) / W)), c = v[0] + f * (v[1] - v[0]), k = e.deltaY > 0 ? 1.25 : 0.8; let a = c - (c - v[0]) * k, b = c + (v[1] - c) * k;
+    a = Math.max(a, t.full[0]); b = Math.min(b, t.full[1]); if (b - a < 20) return; state.views[state.tab] = [a, b]; draw(); };
+  cv.onmousedown = e => { drag = { x: e.clientX, v: state.views[state.tab] && state.views[state.tab].slice() }; };
+  window.onmouseup = () => { drag = null; };
+  window.onmousemove = e => { const t = state.cur; if (!drag || !drag.v || !t || !t.zoom) return; const rect = cv.getBoundingClientRect(), W = rect.width - ML - MR, span = drag.v[1] - drag.v[0], dx = -(e.clientX - drag.x) / W * span;
+    let a = drag.v[0] + dx, b = drag.v[1] + dx; if (a < t.full[0]) { b += t.full[0] - a; a = t.full[0]; } if (b > t.full[1]) { a -= b - t.full[1]; b = t.full[1]; } state.views[state.tab] = [a, b]; draw(); };
+  cv.ondblclick = () => { if (state.cur && state.cur.zoom) { state.views[state.tab] = state.cur.full.slice(); draw(); } };
+  window.onresize = draw;
+}
+window.addEventListener('DOMContentLoaded', initUI);
+</script></body></html>
