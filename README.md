@@ -4,6 +4,8 @@ Proyek ini merupakan implementasi sistem deteksi delineasi gelombang elektrokard
 
 Aplikasi web interaktif **CardioWave DWT** dirancang dengan antarmuka telemetri klinis modern untuk memproses sinyal EKG digital standar biomedis (format PhysioNet MIT-BIH Arrhythmia Database) serta menguraikan proses dekomposisi multiresolusi dan ekstraksi fitur titik gelombang jantung secara transparan, akurat, dan visual.
 
+![Hasil Deteksi Gelombang P-Q-R-S-T EKG](hasil%20DWT.png)
+
 ---
 
 ## 1. Landasan Teori & Referensi Jurnal
