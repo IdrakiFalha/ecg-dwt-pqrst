@@ -1,80 +1,1258 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Deteksi P Q R S T pada ECG - DWT db4 (from scratch)</title>
+<title>CardioWave DWT • Deteksi Gelombang P-Q-R-S-T EKG (db4 from scratch)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f4f6f8;--panel:#fff;--fg:#1d2733;--grid:#e3e8ee;--plot:#fff;--accent:#1565c0;--line:#cfd6de}
-@media (prefers-color-scheme:dark){:root{--bg:#161a1f;--panel:#1f252c;--fg:#e6e9ed;--grid:#2d353e;--plot:#1b2026;--accent:#64a8ff;--line:#38414b}}
-*{box-sizing:border-box}
-body{margin:0;font:13px system-ui,sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
-#side{width:262px;min-width:262px;background:var(--panel);border-right:1px solid var(--line);padding:10px;overflow:auto}
-#side h3{margin:12px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
-#side label{display:flex;align-items:center;justify-content:space-between;margin:3px 0}
-#side input[type=number],#side input[type=text]{width:110px;padding:3px 5px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.two label{display:block}.two input{width:100%!important;margin-top:1px}
-button{cursor:pointer;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px 10px}
-#go{width:100%;background:var(--accent);color:#fff;border:0;font-weight:600;margin:8px 0 4px;padding:8px}
-#demo{width:100%;margin-top:4px;font-size:12px}
-#status{font-size:12px;margin:6px 0;min-height:30px;word-break:break-word}#status.err{color:#d32f2f}
-#fileinfo{font-size:11px;opacity:.75;margin-top:4px}
-#main{flex:1;display:flex;flex-direction:column;min-width:0}
-#tabs{display:flex;gap:2px;padding:8px 8px 0;border-bottom:1px solid var(--line);background:var(--panel)}
-#tabs button{border-radius:4px 4px 0 0;border-bottom:0;padding:6px 14px}#tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-#wrap{flex:1;overflow:auto;padding:8px}
-#cv{display:block;border:1px solid var(--line)}
-#info{white-space:pre-wrap;font:12px ui-monospace,monospace;margin:8px 2px}#hint{font-size:11px;opacity:.6;margin:4px 2px}
-@media (max-width:760px){body{flex-direction:column;height:auto}#side{width:100%;min-width:0}}
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  
+  /* Color Palette - Dark Telemetry Mode (Default) */
+  --bg-app: #080c14;
+  --bg-sidebar: #0f1624;
+  --bg-card: #141d2e;
+  --bg-card-hover: #1a253a;
+  --bg-input: #0b111c;
+  --bg-plot: #090e18;
+  --border-color: #1f2d44;
+  --border-focus: #3b82f6;
+  
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --accent-primary: #2563eb;
+  --accent-primary-hover: #1d4ed8;
+  --accent-primary-glow: rgba(37, 99, 235, 0.35);
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --accent-rose: #f43f5e;
+  --accent-amber: #f59e0b;
+  --accent-purple: #8b5cf6;
+  
+  --grid-line: rgba(148, 163, 184, 0.08);
+  --grid-axis: rgba(148, 163, 184, 0.22);
+  --plot-signal: #38bdf8;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.25);
+}
+
+[data-theme="light"] {
+  --bg-app: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-input: #f8fafc;
+  --bg-plot: #ffffff;
+  --border-color: #e2e8f0;
+  --border-focus: #2563eb;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  
+  --accent-primary: #2563eb;
+  --accent-primary-hover: #1d4ed8;
+  --accent-primary-glow: rgba(37, 99, 235, 0.2);
+  --accent-cyan: #0891b2;
+  --accent-emerald: #059669;
+  --accent-rose: #e11d48;
+  --accent-amber: #d97706;
+  --accent-purple: #7c3aed;
+  
+  --grid-line: rgba(100, 116, 139, 0.08);
+  --grid-axis: rgba(100, 116, 139, 0.22);
+  --plot-signal: #0284c7;
+  
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Header Bar */
+header.app-header {
+  height: 62px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.4);
+}
+
+.brand-icon svg {
+  width: 22px;
+  height: 22px;
+  animation: pulseBeat 1.8s ease-in-out infinite;
+}
+
+@keyframes pulseBeat {
+  0%, 100% { transform: scale(1); }
+  15% { transform: scale(1.15); }
+  30% { transform: scale(0.98); }
+  45% { transform: scale(1.1); }
+  60% { transform: scale(1); }
+}
+
+.brand-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-title h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-title .badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  text-transform: uppercase;
+}
+
+.brand-title p {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--text-muted);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary), #1d4ed8);
+  border: 1px solid var(--accent-primary);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 10px var(--accent-primary-glow);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--accent-primary-glow);
+}
+
+.btn-demo {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--accent-emerald);
+  font-weight: 600;
+}
+
+.btn-demo:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--accent-emerald);
+}
+
+.btn-icon {
+  padding: 7px;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+}
+
+/* App Container Layout */
+.app-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left Sidebar */
+aside.app-sidebar {
+  width: 330px;
+  min-width: 330px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 14px;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.section-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease;
+}
+
+.section-card:hover {
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-title svg {
+  color: var(--accent-cyan);
+}
+
+/* Upload Dropzone */
+.dropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 14px 10px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg-input);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--accent-primary);
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.dropzone input[type=file] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.dropzone-icon {
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+}
+
+.dropzone-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dropzone-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.chips-list {
+  display: flex;
+  gap: 5px;
+}
+
+.chip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip.active {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent-emerald);
+}
+
+.btn-load-122 {
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  color: #60a5fa;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.btn-load-122:hover {
+  background: rgba(37, 99, 235, 0.2);
+  border-color: #3b82f6;
+}
+
+/* Form Controls */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-label span.unit {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.input-control {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  outline: none;
+  width: 100%;
+  transition: all 0.15s ease;
+}
+
+.input-control:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.input-control[readonly] {
+  opacity: 0.85;
+  cursor: not-allowed;
+  background: rgba(0,0,0,0.12);
+}
+
+/* Range Slider + Input Pair */
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-group input[type=range] {
+  flex: 1;
+  accent-color: var(--accent-primary);
+  height: 4px;
+  cursor: pointer;
+}
+
+.slider-group .input-control {
+  width: 65px;
+  text-align: right;
+}
+
+/* T / Delay Filter Grid */
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 2px;
+  transition: all 0.2s ease;
+}
+
+.filter-grid.collapsed {
+  display: none;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 3px 6px;
+  margin-bottom: 4px;
+}
+
+.filter-item span {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.filter-item input {
+  width: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-align: right;
+  outline: none;
+}
+
+/* Checkbox Toggle Switch */
+.switch-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch-label input[type=checkbox] {
+  accent-color: var(--accent-primary);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+/* Status Terminal Card */
+.status-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  word-break: break-word;
+}
+
+.status-card.err {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.08);
+  color: var(--accent-rose);
+}
+
+.status-card.ok {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--accent-emerald);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  margin-top: 5px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--accent-cyan);
+}
+
+.status-card.err .status-dot {
+  background: var(--accent-rose);
+  box-shadow: 0 0 6px var(--accent-rose);
+}
+
+.status-card.ok .status-dot {
+  background: var(--accent-emerald);
+  box-shadow: 0 0 6px var(--accent-emerald);
+}
+
+/* Main Area Layout */
+main.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-app);
+  overflow: hidden;
+}
+
+/* KPI Telemetry Ribbon */
+.kpi-ribbon {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  padding: 14px 18px 8px;
+  flex-shrink: 0;
+}
+
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-primary), transparent);
+}
+
+.kpi-card.kpi-bpm::before { background: linear-gradient(90deg, var(--accent-rose), transparent); }
+.kpi-card.kpi-beats::before { background: linear-gradient(90deg, var(--accent-cyan), transparent); }
+.kpi-card.kpi-acc::before { background: linear-gradient(90deg, var(--accent-emerald), transparent); }
+.kpi-card.kpi-rr::before { background: linear-gradient(90deg, var(--accent-purple), transparent); }
+
+.kpi-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.kpi-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+}
+
+.kpi-badge.warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+}
+
+.kpi-badge.danger {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-rose);
+}
+
+.kpi-subtext {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Tab Bar Navigation */
+.tab-bar-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 18px 0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 6px 6px 0 0;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.tab-btn.active {
+  color: var(--accent-primary);
+  background: var(--bg-app);
+  border-color: var(--border-color);
+  border-bottom-color: var(--bg-app);
+  margin-bottom: -1px;
+}
+
+[data-theme="dark"] .tab-btn.active {
+  color: #60a5fa;
+}
+
+.tab-badge {
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--border-color);
+  color: var(--text-muted);
+}
+
+.tab-btn.active .tab-badge {
+  background: rgba(37, 99, 235, 0.2);
+  color: var(--accent-cyan);
+}
+
+/* Canvas Viewport & Controls HUD */
+.viewport-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  padding: 10px 18px 14px;
+  gap: 8px;
+}
+
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.canvas-hints {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.hint-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 10.5px;
+}
+
+.hud-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+
+.hud-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--text-muted);
+}
+
+.canvas-scroll-container {
+  flex: 1;
+  min-height: 250px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-plot);
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+
+canvas#cv {
+  display: block;
+  cursor: crosshair;
+}
+
+/* Bottom Inspector / Detection Drawer */
+.inspector-drawer {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  height: 150px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.inspector-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.raw-info-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  line-height: 1.5;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* Beat Table */
+.beat-table-container {
+  overflow-x: auto;
+  flex: 1;
+}
+
+table.beat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+}
+
+table.beat-table th {
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  padding: 5px 8px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+table.beat-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  white-space: nowrap;
+}
+
+table.beat-table tr:hover td {
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.tag-p { color: #10b981; font-weight: 600; }
+.tag-q { color: #3b82f6; font-weight: 600; }
+.tag-r { color: #ef4444; font-weight: 700; }
+.tag-s { color: #a855f7; font-weight: 600; }
+.tag-t { color: #f59e0b; font-weight: 600; }
+
+/* Responsive Adjustments */
+@media (max-width: 980px) {
+  body {
+    height: auto;
+    overflow: auto;
+  }
+  .app-container {
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+  aside.app-sidebar {
+    width: 100%;
+    min-width: 0;
+    max-height: none;
+  }
+  .viewport-wrapper {
+    height: 700px;
+  }
+}
 </style>
 </head>
 <body>
-<div id="side">
-  <h3>Process</h3>
-  <label>File <input type="file" id="files" multiple accept=".hea,.dat,.atr" style="width:150px;font-size:11px"></label>
-  <div id="fileinfo">Belum ada file</div>
-  <label style="margin-top:6px">Record <input type="text" id="rec" value="-" readonly></label>
-  <label>NData <input type="number" id="nd" value="999" min="400"></label>
-  <label>Start <input type="number" id="st" value="0" min="0"></label>
-  <label>Channel <input type="number" id="ch" value="0" min="0" max="1"></label>
-  <button id="go">Action</button>
-  <button id="demo">Coba dengan sinyal demo</button>
-  <div id="status">Pilih 122.hea, 122.dat, 122.atr sekaligus, lalu klik Action.</div>
-  <h3>T / Delay (filter Q<sub>j</sub>)</h3>
-  <div class="two"><div id="T"></div><div id="D"></div></div>
-  <label><span><input type="checkbox" id="auto" checked> T/Delay otomatis</span></label>
-  <h3>Ambang &amp; jendela</h3>
-  <label>ThR <input type="number" id="thR" value="0.4" step="0.05"></label>
-  <label>ThP <input type="number" id="thP" value="0.15" step="0.05"></label>
-  <label>ThT <input type="number" id="thT" value="0.2" step="0.05"></label>
-  <label>Refr (ms) <input type="number" id="refr" value="200"></label>
-  <label>Pwin (ms) <input type="number" id="pw" value="300"></label>
-  <label>Twin (ms) <input type="number" id="tw" value="450"></label>
-  <button id="reset-btn" style="width:100%;margin-top:6px;font-size:11px">Reset Parameter Default</button>
-  <div id="stats-box" style="margin-top:10px;padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;font-size:11px;line-height:1.4;display:none">
-    <div style="font-weight:600;margin-bottom:4px;color:var(--accent)">Statistik Klinis:</div>
-    <div id="stat-bpm">BPM: -</div>
-    <div id="stat-beats">Detak: -</div>
-    <div id="stat-acc">Akurasi Se/PPV: -</div>
-    <button id="export-csv-btn" style="width:100%;margin-top:6px;background:var(--accent);color:#fff;border:0;padding:5px;font-size:11px;border-radius:3px">Download Hasil (.csv)</button>
+
+<!-- App Header -->
+<header class="app-header">
+  <div class="brand-section">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+    </div>
+    <div class="brand-title">
+      <h1>CardioWave DWT <span class="badge">db4 from scratch</span></h1>
+    </div>
   </div>
+  
+  <div class="header-actions">
+    <button id="demo" class="btn btn-demo" title="Jalankan analisis dengan sinyal uji coba sintetis">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Sinyal Demo
+    </button>
+    <button id="go" class="btn btn-primary" title="Mulai proses dekomposisi DWT dan deteksi">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      Proses Analisis
+    </button>
+    <button id="export-csv-btn" class="btn" title="Unduh hasil deteksi ke format spreadsheet CSV">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Unduh CSV
+    </button>
+    <button id="theme-toggle" class="btn btn-icon" title="Ganti Tema Gelap / Terang">
+      <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- App Main Layout -->
+<div class="app-container">
+
+  <!-- Left Sidebar Controls -->
+  <aside class="app-sidebar">
+    
+    <!-- File Input Dropzone Card -->
+    <div class="section-card">
+      <div class="section-header">
+        <span class="section-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Dataset PhysioNet
+        </span>
+      </div>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="files" multiple accept=".hea,.dat,.atr">
+        <div class="dropzone-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="dropzone-text">Pilih atau Seret File Rekaman</div>
+        <div class="dropzone-hint">Format didukung: .hea, .dat, dan .atr (MIT-BIH)</div>
+      </div>
+      
+      <div class="file-chips">
+        <div class="chips-list">
+          <span class="chip" id="chip-hea">.hea</span>
+          <span class="chip" id="chip-dat">.dat</span>
+          <span class="chip" id="chip-atr">.atr</span>
+        </div>
+        <button id="btn-load-122" class="btn-load-122" title="Muat otomatis dataset 122 dari folder direktori">
+          Muat 122 Lokal
+        </button>
+      </div>
+
+      <div class="form-group" style="margin-top: 4px;">
+        <label class="form-label">Identitas Record</label>
+        <input type="text" id="rec" class="input-control" value="-" readonly>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">N Data <span class="unit">sampel</span></label>
+          <input type="number" id="nd" class="input-control" value="999" min="400">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mulai (Start)</label>
+          <input type="number" id="st" class="input-control" value="0" min="0">
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Kanal Sinyal (Channel)</label>
+        <input type="number" id="ch" class="input-control" value="0" min="0" max="1">
+      </div>
+    </div>
+
+    <!-- Parameter Ambang & Jendela -->
+    <div class="section-card">
+      <div class="section-header">
+        <span class="section-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Ambang &amp; Jendela Deteksi
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">ThR (Ambang Puncak R) <span class="unit">rasio max</span></label>
+        <div class="slider-group">
+          <input type="range" id="thR-slider" min="0.1" max="0.9" step="0.05" value="0.4">
+          <input type="number" id="thR" class="input-control" value="0.4" step="0.05" min="0.05" max="1.0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">ThP (Ambang Gelombang P) <span class="unit">rasio max</span></label>
+        <div class="slider-group">
+          <input type="range" id="thP-slider" min="0.05" max="0.5" step="0.01" value="0.15">
+          <input type="number" id="thP" class="input-control" value="0.15" step="0.05" min="0.01" max="1.0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">ThT (Ambang Gelombang T) <span class="unit">rasio max</span></label>
+        <div class="slider-group">
+          <input type="range" id="thT-slider" min="0.05" max="0.5" step="0.01" value="0.2">
+          <input type="number" id="thT" class="input-control" value="0.2" step="0.05" min="0.01" max="1.0">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Refr <span class="unit">ms</span></label>
+          <input type="number" id="refr" class="input-control" value="200">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pwin <span class="unit">ms</span></label>
+          <input type="number" id="pw" class="input-control" value="300">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Twin <span class="unit">ms</span></label>
+        <input type="number" id="tw" class="input-control" value="450">
+      </div>
+
+      <button id="reset-btn" class="btn" style="width: 100%; font-size: 11px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset Parameter Default
+      </button>
+    </div>
+
+    <!-- Filter Qj & Group Delay Accordion -->
+    <div class="section-card">
+      <div class="section-header" id="filter-accordion-toggle">
+        <span class="section-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          T &amp; Delay Filter Bank (Q<sub>j</sub>)
+        </span>
+        <span id="filter-arrow" style="font-size: 11px; color: var(--text-muted); transition: transform 0.2s;">▼</span>
+      </div>
+      
+      <label class="switch-label">
+        <input type="checkbox" id="auto" checked>
+        <span>Hitung T &amp; Delay Otomatis (db4)</span>
+      </label>
+
+      <div class="filter-grid" id="filter-inputs-container">
+        <div id="T"></div>
+        <div id="D"></div>
+      </div>
+    </div>
+
+    <!-- Status Log Terminal Card -->
+    <div class="status-card" id="status-box">
+      <div class="status-dot"></div>
+      <div id="status" style="flex: 1;">Pilih 122.hea, 122.dat, 122.atr sekaligus, atau klik tombol Sinyal Demo di atas.</div>
+    </div>
+
+  </aside>
+
+  <!-- Main Viewport Area -->
+  <main class="app-main">
+
+    <!-- KPI Clinical Telemetry Ribbon -->
+    <div class="kpi-ribbon" id="kpi-ribbon">
+      <!-- BPM Card -->
+      <div class="kpi-card kpi-bpm">
+        <div class="kpi-label">
+          <span>Laju Detak Jantung</span>
+          <span class="kpi-badge" id="kpi-bpm-badge">Normal</span>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-bpm-val">--</div>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">BPM</span>
+        </div>
+        <div class="kpi-subtext" id="kpi-bpm-sub">Kondisi ritme sinus</div>
+      </div>
+
+      <!-- Beats Count Card -->
+      <div class="kpi-card kpi-beats">
+        <div class="kpi-label">
+          <span>Total Detak (Beats)</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-beats-val">--</div>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Puncak R</span>
+        </div>
+        <div class="kpi-subtext" id="kpi-beats-sub">Rentang: 0.00 detik</div>
+      </div>
+
+      <!-- RR Interval Card -->
+      <div class="kpi-card kpi-rr">
+        <div class="kpi-label">
+          <span>R-R Interval Rata-rata</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-rr-val">--</div>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">ms</span>
+        </div>
+        <div class="kpi-subtext" id="kpi-rr-sub">Variabilitas inter-beat</div>
+      </div>
+
+      <!-- Annotation Accuracy Card -->
+      <div class="kpi-card kpi-acc">
+        <div class="kpi-label">
+          <span>Akurasi Anotasi (.atr)</span>
+          <span class="kpi-badge" id="kpi-acc-badge">PhysioNet</span>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-acc-val">--</div>
+        </div>
+        <div class="kpi-subtext" id="kpi-acc-sub">Se: -- | PPV: --</div>
+      </div>
+    </div>
+
+    <!-- Tab Bar Navigation -->
+    <div class="tab-bar-container">
+      <div class="tab-nav" id="tabs">
+        <!-- Injected via JavaScript -->
+      </div>
+      <div class="hud-controls">
+        <button id="zoom-in" class="hud-btn" title="Perbesar (Zoom In)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          Zoom +
+        </button>
+        <button id="zoom-out" class="hud-btn" title="Perkecil (Zoom Out)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          Zoom -
+        </button>
+        <button id="zoom-reset" class="hud-btn" title="Reset Tampilan ke Skala Penuh">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          Reset Skala
+        </button>
+      </div>
+    </div>
+
+    <!-- Canvas Viewport -->
+    <div class="viewport-wrapper">
+      <div class="canvas-toolbar">
+        <div class="canvas-hints">
+          <span class="hint-pill">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <span id="hint">Scroll mouse = Zoom, seret = Geser, klik ganda = Reset tampilan</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="canvas-scroll-container" id="wrap">
+        <canvas id="cv"></canvas>
+      </div>
+
+      <!-- Bottom Inspector Drawer -->
+      <div class="inspector-drawer" id="inspector-drawer">
+        <div class="inspector-header">
+          <span class="inspector-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            Tabel Koordinat Gelombang &amp; Sampel P-Q-R-S-T
+          </span>
+        </div>
+        <div class="beat-table-container" id="beat-table-box">
+          <table class="beat-table" id="beat-table">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Gelombang P</th>
+                <th>Gelombang Q</th>
+                <th>Puncak R</th>
+                <th>Gelombang S</th>
+                <th>Gelombang T</th>
+                <th>R-R Interval</th>
+                <th>Estimasi BPM</th>
+              </tr>
+            </thead>
+            <tbody id="beat-table-body">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 12px;">Belum ada hasil deteksi. Klik "Proses Analisis" atau "Sinyal Demo".</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="raw-info-text" id="info" style="display: none;"></div>
+      </div>
+    </div>
+
+  </main>
 </div>
-<div id="main">
-  <div id="tabs"></div>
-  <div id="wrap"><canvas id="cv"></canvas><div id="hint"></div><div id="info"></div></div>
-</div>
+
 <script>
-/* ===================== DWT FROM SCRATCH (db4) ===================== */
-const h_db4 = [0.2303778133088964, 0.7148465705529154, 0.6308807679298587,
-  -0.0279837694168599, -0.1870348117190931, 0.0308413818355607,
-  0.0328830116668852, -0.0105974017850690];                       // LPF db4 (manual)
+/* =========================================================================
+   1. DWT FROM SCRATCH (DAUBECHIES 4 - MALLAT A TROUS ALGORITHM)
+   ========================================================================= */
+const h_db4 = [
+  0.2303778133088964,  0.7148465705529154,  0.6308807679298587,
+  -0.0279837694168599, -0.1870348117190931,  0.0308413818355607,
+   0.0328830116668852, -0.0105974017850690
+]; // LPF db4
 const LF = h_db4.length;
-const g_db4 = h_db4.map((_, n) => ((n % 2 === 0) ? 1 : -1) * h_db4[LF - 1 - n]);   // HPF: g[n] = (-1)^n h[L-1-n]
+const g_db4 = h_db4.map((_, n) => ((n % 2 === 0) ? 1 : -1) * h_db4[LF - 1 - n]); // HPF QMF
 const SQ2 = Math.SQRT2;
-const H = h_db4.map(v => v / SQ2), G = g_db4.map(v => v / SQ2);    // gain DC = 1 per level
+const H = h_db4.map(v => v / SQ2), G = g_db4.map(v => v / SQ2);
 const JMAX = 8;
 
-function konv(x, f) {                       // konvolusi penuh, ditulis manual
+function konv(x, f) {
   const y = new Float64Array(x.length + f.length - 1);
   for (let m = 0; m < f.length; m++) {
     const c = f[m]; if (c === 0) continue;
@@ -82,12 +1260,14 @@ function konv(x, f) {                       // konvolusi penuh, ditulis manual
   }
   return y;
 }
-function upsample(f, m) {                   // algoritma a trous: sisipkan (m-1) nol
+
+function upsample(f, m) {
   const out = new Float64Array((f.length - 1) * m + 1);
   for (let i = 0; i < f.length; i++) out[i * m] = f[i];
   return out;
 }
-function buildQ(J) {                        // Q_j = G(2^(j-1)w) H(2^(j-2)w) ... H(w)
+
+function buildQ(J) {
   const Qs = []; let a = new Float64Array([1]);
   for (let j = 1; j <= J; j++) {
     Qs.push(konv(a, upsample(G, 2 ** (j - 1))));
@@ -96,25 +1276,45 @@ function buildQ(J) {                        // Q_j = G(2^(j-1)w) H(2^(j-2)w) ...
   return Qs;
 }
 const Q = buildQ(JMAX);
-function delayOf(q) {                       // pusat energi impuls respons -> T_j
-  let s1 = 0, s2 = 0; for (let n = 0; n < q.length; n++) { s1 += n * q[n] * q[n]; s2 += q[n] * q[n]; }
+
+function delayOf(q) {
+  let s1 = 0, s2 = 0;
+  for (let n = 0; n < q.length; n++) { s1 += n * q[n] * q[n]; s2 += q[n] * q[n]; }
   return Math.round(s1 / s2);
 }
 const T_auto = Q.map(delayOf);
 const Tmax_auto = Math.max(...T_auto);
-const D_auto = T_auto.map(t => Tmax_auto - t);               // Delay_j = Tmax - T_j
-const SGN = Q.map(q => { let c = 0, best = 0, bs = 1; for (const v of q) { c += v; if (Math.abs(c) > best) { best = Math.abs(c); bs = c > 0 ? 1 : -1; } } return bs; });
-const DA = (() => { let a = new Float64Array([1]); const out = [];
-  for (let j = 1; j <= JMAX; j++) { a = konv(a, upsample(H, 2 ** (j - 1)));
-    let s1 = 0, s2 = 0; for (let n = 0; n < a.length; n++) { s1 += n * a[n]; s2 += a[n]; } out.push(Math.round(s1 / s2)); }
-  return out; })();
+const D_auto = T_auto.map(t => Tmax_auto - t);
+const SGN = Q.map(q => {
+  let c = 0, best = 0, bs = 1;
+  for (const v of q) { c += v; if (Math.abs(c) > best) { best = Math.abs(c); bs = c > 0 ? 1 : -1; } }
+  return bs;
+});
+const DA = (() => {
+  let a = new Float64Array([1]); const out = [];
+  for (let j = 1; j <= JMAX; j++) {
+    a = konv(a, upsample(H, 2 ** (j - 1)));
+    let s1 = 0, s2 = 0;
+    for (let n = 0; n < a.length; n++) { s1 += n * a[n]; s2 += a[n]; }
+    out.push(Math.round(s1 / s2));
+  }
+  return out;
+})();
 
-function reflIdx(i, n) { if (n === 1) return 0; const p = 2 * (n - 1); const m = ((i % p) + p) % p; return m < n ? m : p - m; }
+function reflIdx(i, n) {
+  if (n === 1) return 0;
+  const p = 2 * (n - 1);
+  const m = ((i % p) + p) % p;
+  return m < n ? m : p - m;
+}
 function clip(i, lo, hi) { return i < lo ? lo : (i > hi ? hi : i); }
 
 function mallat(x, T, D, returnA) {
-  const n = x.length; let pad = 0; for (const q of Q) pad = Math.max(pad, q.length); pad = (pad >> 1) + 50;
-  const xp = new Float64Array(n + 2 * pad); for (let i = 0; i < xp.length; i++) xp[i] = x[reflIdx(i - pad, n)];
+  const n = x.length; let pad = 0;
+  for (const q of Q) pad = Math.max(pad, q.length);
+  pad = (pad >> 1) + 50;
+  const xp = new Float64Array(n + 2 * pad);
+  for (let i = 0; i < xp.length; i++) xp[i] = x[reflIdx(i - pad, n)];
   const Tmax = Math.max(...T); let a = xp; const Wj = [], Aj = [];
   for (let j = 1; j <= Q.length; j++) {
     const y = konv(a, upsample(G, 2 ** (j - 1)));
@@ -129,12 +1329,26 @@ function mallat(x, T, D, returnA) {
   return returnA ? [Wj, Aj] : Wj;
 }
 
-/* ===================== DETEKSI ===================== */
-function absMax(w) { let m = 0; for (let i = 0; i < w.length; i++) { const v = Math.abs(w[i]); if (v > m) m = v; } return m; }
-function argmaxRange(a, lo, hi, sgn) {          // argmax sgn*a[lo..hi-1], hasil pertama
-  let bi = lo, bv = -Infinity; for (let i = lo; i < hi; i++) { const v = sgn * a[i]; if (v > bv) { bv = v; bi = i; } } return bi;
+/* =========================================================================
+   2. DETEKSI FITUR P-Q-R-S-T
+   ========================================================================= */
+function absMax(w) {
+  let m = 0;
+  for (let i = 0; i < w.length; i++) { const v = Math.abs(w[i]); if (v > m) m = v; }
+  return m;
 }
-function argmaxAbs(a, lo, hi) { let bi = lo, bv = -1; for (let i = lo; i < hi; i++) { const v = Math.abs(a[i]); if (v > bv) { bv = v; bi = i; } } return bi; }
+
+function argmaxRange(a, lo, hi, sgn) {
+  let bi = lo, bv = -Infinity;
+  for (let i = lo; i < hi; i++) { const v = sgn * a[i]; if (v > bv) { bv = v; bi = i; } }
+  return bi;
+}
+
+function argmaxAbs(a, lo, hi) {
+  let bi = lo, bv = -1;
+  for (let i = lo; i < hi; i++) { const v = Math.abs(a[i]); if (v > bv) { bv = v; bi = i; } }
+  return bi;
+}
 
 function zcPairs(w, thr, win) {
   const ext = [];
@@ -146,7 +1360,8 @@ function zcPairs(w, thr, win) {
   for (let k = 0; k + 1 < ext.length; k++) {
     const [i1, s1] = ext[k], [i2, s2] = ext[k + 1];
     if (s1 !== s2 && i2 - i1 <= win) {
-      let kk = -1; for (let t = i1; t <= i2; t++) if (w[t] * s1 <= 0) { kk = t - i1; break; }
+      let kk = -1;
+      for (let t = i1; t <= i2; t++) if (w[t] * s1 <= 0) { kk = t - i1; break; }
       let z = i1 + (kk >= 0 ? kk : (i2 - i1) >> 1);
       if (z > i1 && Math.abs(w[z - 1]) < Math.abs(w[z])) z -= 1;
       out.push({ z, e1: i1, e2: i2, sign: s1, amp: Math.abs(w[i1]) + Math.abs(w[i2]) });
@@ -173,368 +1388,974 @@ function bestPeak(w, a, b, thr) {
   }
   return best;
 }
-function refine(A, b) {                         // ekstremum sinyal aproksimasi di antara modulus maxima-minima
+
+function refine(A, b) {
   let bi = b.e1, bv = b.sign === 1 ? -Infinity : Infinity;
-  for (let i = b.e1; i <= b.e2; i++) { if (b.sign === 1 ? A[i] > bv : A[i] < bv) { bv = A[i]; bi = i; } }
+  for (let i = b.e1; i <= b.e2; i++) {
+    if (b.sign === 1 ? A[i] > bv : A[i] < bv) { bv = A[i]; bi = i; }
+  }
   return bi;
 }
 
 function detect(x, fs, Wj, P, T, D) {
   const ms = v => Math.round(v * fs / 1000), n = x.length;
   const w3 = Wj[2], w4 = Wj[3];
-  const res = { R: [], Q: [], S: [], P: [], T: [], boxR: [], boxP: [], boxT: [], zc: { Q: [], S: [], R: [], P: [], T: [] },
-    pol: 1, thr4: 0, thr5: 0, thr6: 0, pairsR: [], w5: Wj[4], w6: Wj[5] };
-  // ---- R : zero-crossing skala 4 (AND skala 3)
+  const res = {
+    R: [], Q: [], S: [], P: [], T: [],
+    boxR: [], boxP: [], boxT: [],
+    zc: { Q: [], S: [], R: [], P: [], T: [] },
+    pol: 1, thr4: 0, thr5: 0, thr6: 0, pairsR: [], w5: Wj[4], w6: Wj[5]
+  };
+
+  // 1. R Peak Detection (Skala 4 & 3)
   const thr4 = P.ThR * absMax(w4); res.thr4 = thr4;
   let pr = zcPairs(w4, thr4, ms(100)); if (!pr.length) return res;
-  const npos = pr.filter(p => p.sign === 1).length; const pol = npos >= pr.length - npos ? 1 : -1; res.pol = pol;
+  const npos = pr.filter(p => p.sign === 1).length;
+  const pol = npos >= pr.length - npos ? 1 : -1;
+  res.pol = pol;
   pr = pr.filter(p => p.sign === pol);
   const z3 = zcPairs(w3, P.ThR * 0.5 * absMax(w3), ms(100)).filter(p => p.sign === pol).map(p => p.z);
   pr = pr.filter(p => z3.length && Math.min(...z3.map(z => Math.abs(z - p.z))) <= ms(25));
   pr.sort((a, b) => a.z - b.z);
   const sel = [];
   for (const p of pr) {
-    if (sel.length && p.z - sel[sel.length - 1].z < ms(P.Refr)) { if (p.amp > sel[sel.length - 1].amp) sel[sel.length - 1] = p; }
-    else sel.push(p);
+    if (sel.length && p.z - sel[sel.length - 1].z < ms(P.Refr)) {
+      if (p.amp > sel[sel.length - 1].amp) sel[sel.length - 1] = p;
+    } else sel.push(p);
   }
-  const R = sel.map(p => { const a = Math.max(p.z - ms(30), 0), b = Math.min(p.z + ms(30), n); return argmaxRange(x, a, b, pol); });
+  const R = sel.map(p => {
+    const a = Math.max(p.z - ms(30), 0), b = Math.min(p.z + ms(30), n);
+    return argmaxRange(x, a, b, pol);
+  });
   res.R = R; res.pairsR = sel; res.zc.R = sel.map(p => p.z); res.boxR = sel.map(p => [p.e1, p.e2]);
-  // ---- Q dan S : zero-crossing skala 3
+
+  // 2. Q and S Peaks (Skala 3)
   const wq = w3.map(v => pol * v), Qs = [], Ss = [];
   for (const r of R) {
     const sa = Math.max(r - ms(60), 0); const pm = argmaxRange(wq, sa, r + 1, 1);
     let q = null;
-    for (let k = pm; k > Math.max(r - ms(80), 1); k--) if (wq[k - 1] < 0 && 0 <= wq[k]) { q = k; break; }
+    for (let k = pm; k > Math.max(r - ms(80), 1); k--) {
+      if (wq[k - 1] < 0 && 0 <= wq[k]) { q = k; break; }
+    }
     if (q === null || q >= r) q = argmaxRange(x, sa, r + 1, -pol);
     res.zc.Q.push(q);
     const qa = Math.max(q - 2, 0); q = argmaxRange(x, qa, Math.min(q + 3, n), -pol);
+
     const sb = Math.min(r + ms(60), n - 1); const nm = argmaxRange(wq, r, sb + 1, -1);
     let s = null;
-    for (let k = nm + 1; k < Math.min(r + ms(100), n - 1); k++) if (wq[k - 1] < 0 && 0 <= wq[k]) { s = k; break; }
+    for (let k = nm + 1; k < Math.min(r + ms(100), n - 1); k++) {
+      if (wq[k - 1] < 0 && 0 <= wq[k]) { s = k; break; }
+    }
     if (s === null || s <= r) s = argmaxRange(x, r, sb + 1, -pol);
     res.zc.S.push(s);
     const sa2 = Math.max(s - 2, 0); s = argmaxRange(x, sa2, Math.min(s + 3, n), -pol);
     Qs.push(q); Ss.push(s);
   }
   res.Q = Qs; res.S = Ss;
-  // ---- QRS dipotong (interpolasi linear), DWT ulang untuk skala 5-6
+
+  // 3. Potong Kompleks QRS, Mallat ulang untuk Skala 5-6 (Gelombang P dan T)
   const xc = Float64Array.from(x);
   for (let i = 0; i < Qs.length; i++) {
     const a = Math.max(Qs[i] - ms(10), 0), b = Math.min(Ss[i] + ms(20), n - 1);
-    for (let k = a; k <= b; k++) xc[k] = b > a ? xc[a] + (xc[b] - xc[a]) * (k - a) / (b - a) : xc[a];
+    for (let k = a; k <= b; k++) {
+      xc[k] = b > a ? xc[a] + (xc[b] - xc[a]) * (k - a) / (b - a) : xc[a];
+    }
   }
-  const [Wc, Ac] = mallat(xc, T, D, true); const w5 = Wc[4], w6 = Wc[5]; res.w5 = w5; res.w6 = w6;
+  const [Wc, Ac] = mallat(xc, T, D, true);
+  const w5 = Wc[4], w6 = Wc[5];
+  res.w5 = w5; res.w6 = w6;
+
   const mask = new Uint8Array(n).fill(1);
-  for (const r of R) for (let k = Math.max(r - ms(100), 0); k < Math.min(r + ms(100), n); k++) mask[k] = 0;
-  const refv = w => { let m = 0, any = false; for (let i = 0; i < n; i++) if (mask[i]) { any = true; m = Math.max(m, Math.abs(w[i])); } return any ? m : absMax(w); };
-  res.thr5 = P.ThP * refv(w5); res.thr6 = P.ThT * refv(w6);
-  // ---- T (skala 6) lalu P (skala 5)
+  for (const r of R) {
+    for (let k = Math.max(r - ms(100), 0); k < Math.min(r + ms(100), n); k++) mask[k] = 0;
+  }
+  const refv = w => {
+    let m = 0, any = false;
+    for (let i = 0; i < n; i++) if (mask[i]) { any = true; m = Math.max(m, Math.abs(w[i])); }
+    return any ? m : absMax(w);
+  };
+  res.thr5 = P.ThP * refv(w5);
+  res.thr6 = P.ThT * refv(w6);
+
+  // 4. Deteksi Gelombang T (Skala 6) & Gelombang P (Skala 5)
   const Ts = new Array(R.length).fill(null);
   for (let i = 0; i < R.length; i++) {
     const r = R[i]; const ta = Ss[i] + ms(30); let tb = r + ms(P.Twin);
     if (i + 1 < R.length) tb = Math.min(tb, Math.floor((r + R[i + 1]) / 2));
     const b = bestPeak(w6, ta, tb, res.thr6);
-    if (b) { res.zc.T.push(b.z); res.boxT.push([b.e1, b.e2]); Ts[i] = refine(Ac[4], b); }
+    if (b) {
+      res.zc.T.push(b.z);
+      res.boxT.push([b.e1, b.e2]);
+      Ts[i] = refine(Ac[4], b);
+    }
   }
   for (let i = 0; i < R.length; i++) {
     const r = R[i]; const pb = Qs[i] - ms(15); let pa = r - ms(P.Pwin);
     if (i > 0) pa = Math.max(pa, Ts[i - 1] !== null ? Ts[i - 1] + ms(40) : Math.floor((R[i - 1] + r) / 2));
     const b = bestPeak(w5, pa, pb, res.thr5);
-    if (b) { res.P.push(refine(Ac[3], b)); res.zc.P.push(b.z); res.boxP.push([b.e1, b.e2]); }
+    if (b) {
+      res.P.push(refine(Ac[3], b));
+      res.zc.P.push(b.z);
+      res.boxP.push([b.e1, b.e2]);
+    }
   }
   res.T = Ts.filter(t => t !== null);
   return res;
 }
+
 function evaluate(R, ref, fs, tol = 0.08) {
-  if (!R.length || !ref.length) return null; const t = Math.floor(tol * fs);
+  if (!R.length || !ref.length) return null;
+  const t = Math.floor(tol * fs);
   const se = ref.filter(b => R.some(r => Math.abs(r - b) <= t)).length / ref.length;
-  const ppv = R.filter(r => ref.some(b => Math.abs(r - b) <= t)).length / R.length; return [se, ppv];
-}
-function analyze(x, fs, ref, P, T, D) {
-  const Wj = mallat(x, T, D); const res = detect(x, fs, Wj, P, T, D);
-  Object.assign(res, { x, fs, Wj, ref, off: P.Start, metric: evaluate(res.R, ref, fs) }); return res;
+  const ppv = R.filter(r => ref.some(b => Math.abs(r - b) <= t)).length / R.length;
+  return [se, ppv];
 }
 
-/* ===================== BACA FILE PHYSIONET ===================== */
+function analyze(x, fs, ref, P, T, D) {
+  const Wj = mallat(x, T, D);
+  const res = detect(x, fs, Wj, P, T, D);
+  Object.assign(res, { x, fs, Wj, ref, off: P.Start, metric: evaluate(res.R, ref, fs) });
+  return res;
+}
+
+/* =========================================================================
+   3. BACA FORMAT FILE PHYSIONET MIT-BIH
+   ========================================================================= */
 function parseHea(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('#'));
-  const f = lines[0].trim().split(/\s+/); const nsig = parseInt(f[1]); const fs = parseFloat(f[2]); const ns = parseInt(f[3]);
+  const f = lines[0].trim().split(/\s+/);
+  const nsig = parseInt(f[1]);
+  const fs = parseFloat(f[2]);
+  const ns = parseInt(f[3]);
   const sigs = [];
   for (let i = 1; i <= nsig; i++) {
-    const p = lines[i].trim().split(/\s+/); const gs = p[2] || '200';
-    const gain = parseFloat(gs) || 200; const mb = gs.match(/\((-?\d+)\)/);
+    const p = lines[i].trim().split(/\s+/);
+    const gs = p[2] || '200';
+    const gain = parseFloat(gs) || 200;
+    const mb = gs.match(/\((-?\d+)\)/);
     const adcZero = p[4] !== undefined ? parseInt(p[4]) : 0;
-    sigs.push({ file: p[0], fmt: parseInt(p[1]), gain, baseline: mb ? parseInt(mb[1]) : adcZero, name: p.slice(8).join(' ') || ('ch' + (i - 1)) });
+    sigs.push({
+      file: p[0],
+      fmt: parseInt(p[1]),
+      gain,
+      baseline: mb ? parseInt(mb[1]) : adcZero,
+      name: p.slice(8).join(' ') || ('ch' + (i - 1))
+    });
   }
   return { name: f[0], nsig, fs, ns, sigs };
 }
+
 function readSignal(buf, hdr, ch, start, n) {
   const u8 = new Uint8Array(buf), sg = hdr.sigs[ch], nsig = hdr.nsig, out = new Float64Array(n);
-  const get = i => {                                   // i = indeks sampel dalam aliran ber-interleave
+  const get = i => {
     if (sg.fmt === 212) {
-      const t = (i >> 1) * 3; if (t + 2 >= u8.length) return null;
-      let v; if ((i & 1) === 0) v = u8[t] | ((u8[t + 1] & 0x0F) << 8); else v = u8[t + 2] | ((u8[t + 1] & 0xF0) << 4);
+      const t = (i >> 1) * 3;
+      if (t + 2 >= u8.length) return null;
+      let v;
+      if ((i & 1) === 0) v = u8[t] | ((u8[t + 1] & 0x0F) << 8);
+      else v = u8[t + 2] | ((u8[t + 1] & 0xF0) << 4);
       return v > 2047 ? v - 4096 : v;
     }
-    if (sg.fmt === 16) { const t = i * 2; if (t + 1 >= u8.length) return null; const v = u8[t] | (u8[t + 1] << 8); return v > 32767 ? v - 65536 : v; }
+    if (sg.fmt === 16) {
+      const t = i * 2;
+      if (t + 1 >= u8.length) return null;
+      const v = u8[t] | (u8[t + 1] << 8);
+      return v > 32767 ? v - 65536 : v;
+    }
     throw new Error('Format .dat ' + sg.fmt + ' belum didukung (hanya 212 dan 16)');
   };
-  for (let k = 0; k < n; k++) { const v = get((start + k) * nsig + ch); if (v === null) throw new Error('Data .dat lebih pendek dari NData/Start'); out[k] = (v - sg.baseline) / sg.gain; }
-  return out;
-}
-const BEAT_CODES = new Set([1, 2, 3, 26, 8, 4, 7, 9, 5, 42, 6, 35, 11, 36, 10, 12, 39, 13, 31]);   // N L R B A a J S V r F e j n E / f Q ?
-function parseAtr(buf) {
-  const dv = new DataView(buf); const out = []; let t = 0, i = 0;
-  while (i + 1 < buf.byteLength) {
-    const w = dv.getUint16(i, true); i += 2; const code = w >> 10, tm = w & 0x3FF;
-    if (w === 0) break;
-    if (code === 59) { const hi = dv.getUint16(i, true), lo = dv.getUint16(i + 2, true); i += 4; t += hi * 65536 + lo; }
-    else if (code === 63) { i += tm + (tm & 1); }
-    else if (code === 60 || code === 61 || code === 62) { /* NUM / SUB / CHN */ }
-    else { t += tm; out.push([t, code]); }
+  for (let k = 0; k < n; k++) {
+    const v = get((start + k) * nsig + ch);
+    if (v === null) throw new Error('Data .dat lebih pendek dari NData/Start yang diminta');
+    out[k] = (v - sg.baseline) / sg.gain;
   }
   return out;
 }
-window.ECG = { mallat, detect, analyze, parseHea, readSignal, parseAtr, T_auto, D_auto, Q, h_db4, g_db4, zcPairs, bestPeak, BEAT_CODES, Tmax_auto };
-/* ===================== PLOT (canvas, tanpa library) ===================== */
-const COL = { P: '#2ca02c', Q: '#1f77b4', R: '#d62728', S: '#9467bd', T: '#8c564b' };
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const BEAT_CODES = new Set([1, 2, 3, 26, 8, 4, 7, 9, 5, 42, 6, 35, 11, 36, 10, 12, 39, 13, 31]);
+function parseAtr(buf) {
+  const dv = new DataView(buf); const out = []; let t = 0, i = 0;
+  while (i + 1 < buf.byteLength) {
+    const w = dv.getUint16(i, true); i += 2;
+    const code = w >> 10, tm = w & 0x3FF;
+    if (w === 0) break;
+    if (code === 59) {
+      const hi = dv.getUint16(i, true), lo = dv.getUint16(i + 2, true);
+      i += 4; t += hi * 65536 + lo;
+    } else if (code === 63) {
+      i += tm + (tm & 1);
+    } else if (code === 60 || code === 61 || code === 62) {
+      /* SKIP NUM / SUB / CHN */
+    } else {
+      t += tm; out.push([t, code]);
+    }
+  }
+  return out;
+}
+
+window.ECG = {
+  mallat, detect, analyze, parseHea, readSignal, parseAtr,
+  T_auto, D_auto, Q, h_db4, g_db4, zcPairs, bestPeak, BEAT_CODES, Tmax_auto
+};
+
+/* =========================================================================
+   4. RENDER PLOT (CANVAS HIGH-DPI MODERN STYLING)
+   ========================================================================= */
+const COL = {
+  P: '#10b981', // Emerald
+  Q: '#3b82f6', // Bright Blue
+  R: '#ef4444', // Vivid Red
+  S: '#a855f7', // Purple
+  T: '#f59e0b'  // Amber
+};
+
+const getCss = (n, fallback) => {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  return v || fallback;
+};
 
 function niceTicks(lo, hi, n) {
-  const span = hi - lo || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), nm = step0 / mag;
+  const span = hi - lo || 1, step0 = span / n;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0))), nm = step0 / mag;
   const step = (nm < 1.5 ? 1 : nm < 3 ? 2 : nm < 7 ? 5 : 10) * mag, out = [];
   for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
   return { ticks: out, step };
 }
 const fmt = (v, step) => step >= 1 ? String(Math.round(v)) : v.toFixed(Math.min(4, Math.max(0, -Math.floor(Math.log10(step)))));
 
-const ML = 54, MR = 12;
+const ML = 56, MR = 16;
 function drawPanel(ctx, r, p, view) {
   const leg = [];
   for (const s of p.series || []) if (s.label) leg.push([s.label, s.color]);
   for (const m of p.marks || []) if (m.label) leg.push([m.label, m.color]);
   for (const s of p.spans || []) if (s.label && !leg.some(l => l[0] === s.label)) leg.push([s.label, s.color]);
-  const L = r.x + ML, Rr = r.x + r.w - MR, T = r.y + (leg.length ? 34 : 20), B = r.y + r.h - (p.showX ? 32 : 6);
-  const fg = css('--fg'), grid = css('--grid');
+  
+  const hasLeg = leg.length > 0;
+  const L = r.x + ML, Rr = r.x + r.w - MR;
+  const T = r.y + (hasLeg ? 46 : 24);
+  const B = r.y + r.h - (p.showX ? 32 : 8);
+  
+  const fg = getCss('--text-primary', '#f1f5f9');
+  const fgMuted = getCss('--text-muted', '#64748b');
+  const gridLine = getCss('--grid-line', 'rgba(148, 163, 184, 0.08)');
+  const gridAxis = getCss('--grid-axis', 'rgba(148, 163, 184, 0.22)');
+  const borderCol = getCss('--border-color', '#1f2d44');
+  
   let x0, x1;
   if (p.xlim) [x0, x1] = p.xlim; else [x0, x1] = view;
-  // rentang y dari data yang terlihat
+
   let lo = Infinity, hi = -Infinity;
-  const take = (xs, ys, off) => { for (let i = 0; i < ys.length; i++) { const xv = xs ? xs[i] : i + off; if (xv < x0 || xv > x1) continue; const v = ys[i]; if (v < lo) lo = v; if (v > hi) hi = v; } };
+  const take = (xs, ys, off) => {
+    for (let i = 0; i < ys.length; i++) {
+      const xv = xs ? xs[i] : i + off;
+      if (xv < x0 || xv > x1) continue;
+      const v = ys[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+  };
   for (const s of p.series || []) take(s.x, s.y, p.off || 0);
   if (p.ylim) [lo, hi] = p.ylim;
   if (!isFinite(lo)) { lo = -1; hi = 1; }
   for (const h of p.hlines || []) { lo = Math.min(lo, h.y); hi = Math.max(hi, h.y); }
   if (hi - lo < 1e-12) { hi += 1; lo -= 1; }
-  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
-  const X = v => L + (v - x0) / (x1 - x0) * (Rr - L), Y = v => B - (v - lo) / (hi - lo) * (B - T);
-  ctx.save(); ctx.font = '11px system-ui,sans-serif'; ctx.fillStyle = fg; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(p.title || '', L, r.y + 13);
-  if (p.text) { ctx.strokeStyle = grid; ctx.strokeRect(L, T, Rr - L, B - T); ctx.textAlign = 'left'; ctx.font = '11px ui-monospace,monospace'; p.text.forEach((s, i) => ctx.fillText(s, L + 8, T + 18 + i * 15)); ctx.restore(); return; }
-  // grid + tick
-  const yt = niceTicks(lo, hi, 4), xt = niceTicks(x0, x1, Math.max(3, Math.floor((Rr - L) / 90)));
-  ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.textAlign = 'right';
-  for (const v of yt.ticks) { const y = Y(v); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(Rr, y); ctx.stroke(); ctx.fillText(fmt(v, yt.step), L - 5, y + 4); }
+  const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+
+  const X = v => L + (v - x0) / (x1 - x0) * (Rr - L);
+  const Y = v => B - (v - lo) / (hi - lo) * (B - T);
+
+  ctx.save();
+  ctx.font = '600 11.5px ' + getCss('--font-sans', 'sans-serif');
+  ctx.fillStyle = fg;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(p.title || '', L, r.y + 15);
+
+  if (p.text) {
+    ctx.strokeStyle = borderCol;
+    ctx.strokeRect(L, T, Rr - L, B - T);
+    ctx.textAlign = 'left';
+    ctx.font = '11px ' + getCss('--font-mono', 'monospace');
+    ctx.fillStyle = fgMuted;
+    p.text.forEach((s, i) => ctx.fillText(s, L + 10, T + 20 + i * 16));
+    ctx.restore();
+    return;
+  }
+
+  // Ticks & Grid
+  const yt = niceTicks(lo, hi, 4);
+  const xt = niceTicks(x0, x1, Math.max(3, Math.floor((Rr - L) / 95)));
+
+  // Grid Horizontal
+  ctx.strokeStyle = gridLine;
+  ctx.lineWidth = 1;
+  ctx.textAlign = 'right';
+  ctx.font = '10px ' + getCss('--font-mono', 'monospace');
+  for (const v of yt.ticks) {
+    const y = Y(v);
+    ctx.beginPath();
+    ctx.moveTo(L, y);
+    ctx.lineTo(Rr, y);
+    ctx.stroke();
+    ctx.fillStyle = fgMuted;
+    ctx.fillText(fmt(v, yt.step), L - 6, y + 3.5);
+  }
+
+  // Grid Vertikal
   ctx.textAlign = 'center';
-  for (const v of xt.ticks) { const x = X(v); ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, B); ctx.stroke(); if (p.showX) ctx.fillText(fmt(v, xt.step), x, B + 13); }
-  ctx.strokeStyle = fg; ctx.strokeRect(L, T, Rr - L, B - T);
-  if (p.showX && p.xlabel) { ctx.fillText(p.xlabel, (L + Rr) / 2, r.y + r.h - 4); }
-  ctx.beginPath(); ctx.rect(L, T, Rr - L, B - T); ctx.clip();
-  for (const s of p.spans || []) { ctx.globalAlpha = 0.25; ctx.fillStyle = s.color; ctx.fillRect(X(s.a), T, Math.max(1, X(s.b) - X(s.a)), B - T); }
+  for (const v of xt.ticks) {
+    const x = X(v);
+    ctx.beginPath();
+    ctx.moveTo(x, T);
+    ctx.lineTo(x, B);
+    ctx.stroke();
+    if (p.showX) {
+      ctx.fillStyle = fgMuted;
+      ctx.fillText(fmt(v, xt.step), x, B + 14);
+    }
+  }
+
+  // Frame Box
+  ctx.strokeStyle = gridAxis;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(L, T, Rr - L, B - T);
+
+  if (p.showX && p.xlabel) {
+    ctx.fillStyle = fg;
+    ctx.font = '500 11px ' + getCss('--font-sans', 'sans-serif');
+    ctx.fillText(p.xlabel, (L + Rr) / 2, r.y + r.h - 5);
+  }
+
+  // Clip content area
+  ctx.beginPath();
+  ctx.rect(L, T, Rr - L, B - T);
+  ctx.clip();
+
+  // Spans (P, QRS, T detection window overlays)
+  for (const s of p.spans || []) {
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = s.color;
+    ctx.fillRect(X(s.a), T, Math.max(1, X(s.b) - X(s.a)), B - T);
+  }
   ctx.globalAlpha = 1;
-  for (const h of p.hlines || []) { ctx.strokeStyle = h.color || fg; ctx.setLineDash(h.dash ? [5, 4] : []); ctx.lineWidth = h.dash ? 1 : 0.7; ctx.beginPath(); ctx.moveTo(L, Y(h.y)); ctx.lineTo(Rr, Y(h.y)); ctx.stroke(); }
+
+  // Hlines
+  for (const h of p.hlines || []) {
+    ctx.strokeStyle = h.color || gridAxis;
+    ctx.setLineDash(h.dash ? [4, 4] : []);
+    ctx.lineWidth = h.dash ? 1.2 : 0.8;
+    ctx.beginPath();
+    ctx.moveTo(L, Y(h.y));
+    ctx.lineTo(Rr, Y(h.y));
+    ctx.stroke();
+  }
   ctx.setLineDash([]);
+
+  // Series Waves
   for (const s of p.series || []) {
-    ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.lw || 1;
+    ctx.strokeStyle = s.color || getCss('--plot-signal', '#38bdf8');
+    ctx.fillStyle = s.color || getCss('--plot-signal', '#38bdf8');
+    ctx.lineWidth = s.lw || 1.6;
+
     if (s.type === 'stem') {
-      for (let i = 0; i < s.y.length; i++) { const xx = X(s.x ? s.x[i] : i), yy = Y(s.y[i]); ctx.beginPath(); ctx.moveTo(xx, Y(0)); ctx.lineTo(xx, yy); ctx.stroke(); ctx.beginPath(); ctx.arc(xx, yy, 3, 0, 7); ctx.fill(); }
+      for (let i = 0; i < s.y.length; i++) {
+        const xx = X(s.x ? s.x[i] : i), yy = Y(s.y[i]);
+        ctx.beginPath(); ctx.moveTo(xx, Y(0)); ctx.lineTo(xx, yy); ctx.stroke();
+        ctx.beginPath(); ctx.arc(xx, yy, 3.2, 0, Math.PI * 2); ctx.fill();
+      }
     } else {
-      ctx.beginPath(); let first = true;
-      for (let i = 0; i < s.y.length; i++) { const xv = s.x ? s.x[i] : i + (p.off || 0); if (xv < x0 - 2 && !(s.x)) { if (xv < x0 - 2) continue; } if (xv > x1 + 2 && !s.x) break;
-        const xx = X(xv), yy = Y(s.y[i]); if (first) { ctx.moveTo(xx, yy); first = false; } else ctx.lineTo(xx, yy); }
+      ctx.beginPath();
+      let first = true;
+      for (let i = 0; i < s.y.length; i++) {
+        const xv = s.x ? s.x[i] : i + (p.off || 0);
+        if (xv < x0 - 2 && !s.x) continue;
+        if (xv > x1 + 2 && !s.x) break;
+        const xx = X(xv), yy = Y(s.y[i]);
+        if (first) { ctx.moveTo(xx, yy); first = false; } else ctx.lineTo(xx, yy);
+      }
       ctx.stroke();
     }
   }
+
+  // Markers
   for (const m of p.marks || []) {
-    ctx.fillStyle = m.color; ctx.strokeStyle = m.color;
+    ctx.fillStyle = m.color;
+    ctx.strokeStyle = m.color;
     for (let i = 0; i < m.x.length; i++) {
-      const xx = X(m.x[i]), yy = Y(m.y[i]); if (xx < L - 5 || xx > Rr + 5) continue;
-      if (m.shape === 'x') { ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(xx - 4, yy - 4); ctx.lineTo(xx + 4, yy + 4); ctx.moveTo(xx + 4, yy - 4); ctx.lineTo(xx - 4, yy + 4); ctx.stroke(); }
-      else if (m.shape === 'tri') { ctx.beginPath(); ctx.moveTo(xx, yy - 5); ctx.lineTo(xx + 4, yy + 3); ctx.lineTo(xx - 4, yy + 3); ctx.fill(); }
-      else { ctx.beginPath(); ctx.arc(xx, yy, 4, 0, 7); ctx.fill(); }
-      if (m.text) { ctx.font = 'bold 12px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillText(m.text, xx, yy + (m.below ? 16 : -8)); }
+      const xx = X(m.x[i]), yy = Y(m.y[i]);
+      if (xx < L - 6 || xx > Rr + 6) continue;
+      
+      if (m.shape === 'x') {
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(xx - 4, yy - 4); ctx.lineTo(xx + 4, yy + 4);
+        ctx.moveTo(xx + 4, yy - 4); ctx.lineTo(xx - 4, yy + 4);
+        ctx.stroke();
+      } else if (m.shape === 'tri') {
+        ctx.beginPath();
+        ctx.moveTo(xx, yy - 5);
+        ctx.lineTo(xx + 4, yy + 4);
+        ctx.lineTo(xx - 4, yy + 4);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(xx, yy, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      if (m.text) {
+        ctx.font = '700 12px ' + getCss('--font-mono', 'monospace');
+        ctx.textAlign = 'center';
+        ctx.fillStyle = m.color;
+        ctx.fillText(m.text, xx, yy + (m.below ? 16 : -8));
+      }
     }
   }
   ctx.restore();
-  // legenda (baris di bawah judul)
-  ctx.save(); ctx.font = '11px system-ui,sans-serif'; ctx.textAlign = 'left'; let lx = L;
-  for (let i = 0; i < leg.length; i++) { ctx.fillStyle = leg[i][1]; ctx.fillRect(lx, r.y + 20, 10, 8); ctx.fillStyle = fg; ctx.fillText(leg[i][0], lx + 13, r.y + 28); lx += ctx.measureText(leg[i][0]).width + 26; }
+
+  // Legend Bar
+  ctx.save();
+  ctx.font = '500 10.5px ' + getCss('--font-sans', 'sans-serif');
+  ctx.textAlign = 'left';
+  let lx = L;
+  for (let i = 0; i < leg.length; i++) {
+    ctx.fillStyle = leg[i][1];
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(lx, r.y + 27, 11, 7, 2) : ctx.rect(lx, r.y + 27, 11, 7);
+    ctx.fill();
+    ctx.fillStyle = fg;
+    ctx.fillText(leg[i][0], lx + 15, r.y + 34);
+    lx += ctx.measureText(leg[i][0]).width + 28;
+  }
   ctx.restore();
 }
 
 function render(canvas, panels, view, cols, rowH) {
-  const dpr = window.devicePixelRatio || 1, cssW = canvas.parentElement.clientWidth - 4;
-  const rows = Math.ceil(panels.length / cols), cssH = rows * rowH;
-  canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px'; canvas.width = Math.floor(cssW * dpr); canvas.height = Math.floor(cssH * dpr);
-  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cssW, cssH);
-  ctx.fillStyle = css('--plot'); ctx.fillRect(0, 0, cssW, cssH);
-  const cw = cssW / cols; canvas._geom = { cols, rowH, cssW, n: panels.length };
-  panels.forEach((p, i) => { const c = i % cols, rI = Math.floor(i / cols); drawPanel(ctx, { x: c * cw, y: rI * rowH, w: cw, h: rowH }, p, view); });
+  const dpr = window.devicePixelRatio || 1;
+  const parentW = canvas.parentElement.clientWidth;
+  const parentH = canvas.parentElement.clientHeight;
+  const cssW = Math.max(parentW - 4, 300);
+  const rows = Math.ceil(panels.length / cols);
+
+  let effectiveRowH = rowH;
+  if (rows === 1) {
+    // Single panel fills the viewport perfectly with zero vertical scrolling
+    effectiveRowH = Math.max(parentH - 4, 280);
+  } else if (rows === 2 && cols > 1 && parentH > 480) {
+    effectiveRowH = Math.max(Math.floor((parentH - 10) / 2), 220);
+  }
+
+  const cssH = rows * effectiveRowH;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  ctx.fillStyle = getCss('--bg-plot', '#090e18');
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  const cw = cssW / cols;
+  canvas._geom = { cols, rowH: effectiveRowH, cssW, n: panels.length };
+  panels.forEach((p, i) => {
+    const c = i % cols, rI = Math.floor(i / cols);
+    drawPanel(ctx, { x: c * cw, y: rI * effectiveRowH, w: cw, h: effectiveRowH }, p, view);
+  });
 }
 
-/* ===================== MODEL TAB ===================== */
+/* =========================================================================
+   5. TAB PANELS DEFINITION
+   ========================================================================= */
 const nOf = res => res.x.length;
-function sampleX(res) { return res.off; }
+
 function tab_input(res) {
-  const p = { title: `Input - ${res.name} (fs=${res.fs} Hz, N=${nOf(res)})`, off: res.off, showX: true, xlabel: 'sampel (n)', series: [{ y: res.x, color: '#1f77b4', label: 'ECG (mV)' }], marks: [] };
-  if (res.ref.length) p.marks.push({ x: res.ref.map(i => i + res.off), y: res.ref.map(i => res.x[i]), color: '#2e7d32', shape: 'x', label: 'anotasi .atr' });
-  return { panels: [p], cols: 1, rowH: 340, zoom: true };
+  const p = {
+    title: `Sinyal Masukan Mentah: ${res.name} (fs = ${res.fs} Hz, N = ${nOf(res)} sampel)`,
+    off: res.off,
+    showX: true,
+    xlabel: 'Sampel Waktu (n)',
+    series: [{ y: res.x, color: getCss('--plot-signal', '#38bdf8'), lw: 1.6, label: 'Amplitudo EKG (mV)' }],
+    marks: []
+  };
+  if (res.ref.length) {
+    p.marks.push({
+      x: res.ref.map(i => i + res.off),
+      y: res.ref.map(i => res.x[i]),
+      color: '#10b981',
+      shape: 'x',
+      label: 'Anotasi Ahli (.atr)'
+    });
+  }
+  return { panels: [p], cols: 1, rowH: 360, zoom: true };
 }
+
 function tab_mallat(res) {
-  const P = [{ title: 'x (sinyal)  |  W_j = x * Q_j (Mallat db4, a trous), sudah disejajarkan: T_j + Delay_j = Tmax', off: res.off, series: [{ y: res.x, color: '#1f77b4' }] }];
-  res.Wj.forEach((w, j) => P.push({ title: 'Q' + (j + 1), off: res.off, series: [{ y: w, color: '#7e57c2' }] }));
-  P[P.length - 1].showX = true; P[P.length - 1].xlabel = 'sampel (n)';
-  return { panels: P, cols: 1, rowH: 92, zoom: true };
+  const P = [{
+    title: 'x (sinyal)  |  W_j = x * Q_j (Dekomposisi Mallat db4 à trous, sejajar: T_j + Delay_j = Tmax)',
+    off: res.off,
+    series: [{ y: res.x, color: getCss('--plot-signal', '#38bdf8'), lw: 1.4 }]
+  }];
+  res.Wj.forEach((w, j) => {
+    P.push({
+      title: `Skala Q${j + 1} (${['High Noise', 'EMG Noise', 'Kompleks QRS', 'Kompleks QRS', 'Gelombang P', 'Gelombang T', 'Respirasi/Baseline', 'Baseline Wander'][j] || ''})`,
+      off: res.off,
+      series: [{ y: w, color: '#8b5cf6', lw: 1.3 }]
+    });
+  });
+  P[P.length - 1].showX = true;
+  P[P.length - 1].xlabel = 'Sampel Waktu (n)';
+  return { panels: P, cols: 1, rowH: 96, zoom: true };
 }
+
 function tab_filter(res) {
-  const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
+  const colors = ['#3b82f6', '#f97316', '#10b981', '#ef4444', '#8b5cf6', '#d97706', '#ec4899', '#64748b'];
   const idx = h_db4.map((_, i) => i);
-  const respF = (f, K) => { const out = new Float64Array(K), xs = new Float64Array(K); for (let k = 0; k < K; k++) { const w = Math.PI * k / (K - 1); let re = 0, im = 0; for (let n = 0; n < f.length; n++) { re += f[n] * Math.cos(w * n); im -= f[n] * Math.sin(w * n); } out[k] = Math.hypot(re, im); xs[k] = w / Math.PI; } return [xs, out]; };
+  const respF = (f, K) => {
+    const out = new Float64Array(K), xs = new Float64Array(K);
+    for (let k = 0; k < K; k++) {
+      const w = Math.PI * k / (K - 1);
+      let re = 0, im = 0;
+      for (let n = 0; n < f.length; n++) {
+        re += f[n] * Math.cos(w * n);
+        im -= f[n] * Math.sin(w * n);
+      }
+      out[k] = Math.hypot(re, im);
+      xs[k] = w / Math.PI;
+    }
+    return [xs, out];
+  };
   const [wx, hm] = respF(h_db4, 200), [, gm] = respF(g_db4, 200);
-  const qs = Q.map((q, j) => { const K = 240, xs = new Float64Array(K), ys = new Float64Array(K); for (let k = 0; k < K; k++) { const w = Math.PI * k / (K - 1); let re = 0, im = 0; for (let n = 0; n < q.length; n++) { re += q[n] * Math.cos(w * n); im -= q[n] * Math.sin(w * n); } ys[k] = Math.hypot(re, im); xs[k] = w / Math.PI * res.fs / 2; } return { x: xs, y: ys, color: colors[j], label: 'Q' + (j + 1), lw: 1.2 }; });
+  const qs = Q.map((q, j) => {
+    const K = 240, xs = new Float64Array(K), ys = new Float64Array(K);
+    for (let k = 0; k < K; k++) {
+      const w = Math.PI * k / (K - 1);
+      let re = 0, im = 0;
+      for (let n = 0; n < q.length; n++) {
+        re += q[n] * Math.cos(w * n);
+        im -= q[n] * Math.sin(w * n);
+      }
+      ys[k] = Math.hypot(re, im);
+      xs[k] = w / Math.PI * res.fs / 2;
+    }
+    return { x: xs, y: ys, color: colors[j], label: 'Q' + (j + 1), lw: 1.3 };
+  });
   const sum = a => a.reduce((s, v) => s + v, 0);
   const panels = [
-    { title: 'h[n]  (LPF db4)', xlim: [-0.5, 7.5], showX: true, series: [{ x: idx, y: h_db4, color: '#1f77b4', type: 'stem' }], hlines: [{ y: 0 }] },
-    { title: 'g[n] = (-1)^n h[L-1-n]  (HPF)', xlim: [-0.5, 7.5], showX: true, series: [{ x: idx, y: g_db4, color: '#ff7f0e', type: 'stem' }], hlines: [{ y: 0 }] },
-    { title: 'Respons frekuensi (sumbu = w/pi)', xlim: [0, 1], showX: true, series: [{ x: wx, y: hm, color: '#1f77b4', label: '|H|' }, { x: wx, y: gm, color: '#ff7f0e', label: '|G|' }] },
-    { title: '|Q_j(f)|  ekuivalen filter bank (Hz)', xlim: [0, res.fs / 2], showX: true, series: qs },
-    { title: 'Impuls respons Q1..Q4 (j1..j4)', xlim: [0, Q[3].length], showX: true, series: Q.slice(0, 4).map((q, j) => ({ y: q, color: colors[j], label: 'Q' + (j + 1) })) },
-    { title: 'Pemeriksaan koefisien db4', showX: false, xlim: [0, 1], text: [
-      'sum h   = ' + sum(h_db4).toFixed(6) + ' (sqrt2)', 'sum h^2 = ' + sum(h_db4.map(v => v * v)).toFixed(6) + ' (1)', 'sum g   = ' + sum(g_db4).toFixed(6) + ' (0)', '',
-      'T_j:', '[' + T_auto.join(',') + ']', 'Delay_j:', '[' + D_auto.join(',') + ']'] }];
-  return { panels, cols: 3, rowH: 270, zoom: false };
+    { title: 'h[n]  (Low Pass Filter db4)', xlim: [-0.5, 7.5], showX: true, series: [{ x: idx, y: h_db4, color: '#3b82f6', type: 'stem' }], hlines: [{ y: 0 }] },
+    { title: 'g[n] = (-1)^n h[L-1-n]  (High Pass Filter db4)', xlim: [-0.5, 7.5], showX: true, series: [{ x: idx, y: g_db4, color: '#f97316', type: 'stem' }], hlines: [{ y: 0 }] },
+    { title: 'Respons Frekuensi |H| dan |G| (w/pi)', xlim: [0, 1], showX: true, series: [{ x: wx, y: hm, color: '#3b82f6', label: '|H|' }, { x: wx, y: gm, color: '#f97316', label: '|G|' }] },
+    { title: '|Q_j(f)| Filter Bank Ekuivalen (Hz)', xlim: [0, res.fs / 2], showX: true, series: qs },
+    { title: 'Impuls Respons Q1 - Q4', xlim: [0, Q[3].length], showX: true, series: Q.slice(0, 4).map((q, j) => ({ y: q, color: colors[j], label: 'Q' + (j + 1) })) },
+    {
+      title: 'Karakteristik Matematis db4',
+      showX: false,
+      xlim: [0, 1],
+      text: [
+        'sum(h)    = ' + sum(h_db4).toFixed(6) + ' (sqrt2)',
+        'sum(h^2)  = ' + sum(h_db4.map(v => v * v)).toFixed(6) + ' (1.000000)',
+        'sum(g)    = ' + sum(g_db4).toFixed(6) + ' (0.000000)',
+        '',
+        'Pusat Energi T_j : [' + T_auto.join(', ') + ']',
+        'Group Delay D_j  : [' + D_auto.join(', ') + ']'
+      ]
+    }
+  ];
+  return { panels, cols: 3, rowH: 260, zoom: false };
 }
+
 function tab_zero(res) {
-  const o = res.off, W = res.Wj, mk = (k, w, idx) => ({ x: idx.map(i => i + o), y: idx.map(i => w[i]), color: COL[k], label: 'zero-cross ' + k });
+  const o = res.off, W = res.Wj;
+  const mk = (k, w, idx) => ({ x: idx.map(i => i + o), y: idx.map(i => w[i]), color: COL[k], label: 'Zero-Crossing ' + k });
   const P = [
-    { title: 'Q3 : zero-crossing Q & S', off: o, series: [{ y: W[2], color: '#7e57c2' }], hlines: [{ y: 0 }], marks: [mk('Q', W[2], res.zc.Q), mk('S', W[2], res.zc.S)] },
-    { title: 'Q4 : zero-crossing R (+ ambang ThR)', off: o, series: [{ y: W[3], color: '#7e57c2' }], hlines: [{ y: 0 }, { y: res.thr4, dash: 1, color: '#d62728' }, { y: -res.thr4, dash: 1, color: '#d62728' }], marks: [mk('R', W[3], res.zc.R)] },
-    { title: 'Q5 : zero-crossing P (setelah QRS dipotong)', off: o, series: [{ y: res.w5, color: '#7e57c2' }], hlines: [{ y: 0 }, { y: res.thr5, dash: 1, color: '#d62728' }, { y: -res.thr5, dash: 1, color: '#d62728' }], marks: [mk('P', res.w5, res.zc.P)] },
-    { title: 'Q6 : zero-crossing T (setelah QRS dipotong)', off: o, series: [{ y: res.w6, color: '#7e57c2' }], hlines: [{ y: 0 }, { y: res.thr6, dash: 1, color: '#d62728' }, { y: -res.thr6, dash: 1, color: '#d62728' }], marks: [mk('T', res.w6, res.zc.T)], showX: true, xlabel: 'sampel (n)' }];
-  return { panels: P, cols: 1, rowH: 190, zoom: true };
+    { title: 'Q3 : Penanda Zero-Crossing Gelombang Q & S', off: o, series: [{ y: W[2], color: '#8b5cf6' }], hlines: [{ y: 0 }], marks: [mk('Q', W[2], res.zc.Q), mk('S', W[2], res.zc.S)] },
+    { title: 'Q4 : Penanda Zero-Crossing Puncak R (Ambang ThR)', off: o, series: [{ y: W[3], color: '#8b5cf6' }], hlines: [{ y: 0 }, { y: res.thr4, dash: 1, color: '#ef4444' }, { y: -res.thr4, dash: 1, color: '#ef4444' }], marks: [mk('R', W[3], res.zc.R)] },
+    { title: 'Q5 : Penanda Zero-Crossing Gelombang P (Setelah QRS diisolasi)', off: o, series: [{ y: res.w5, color: '#8b5cf6' }], hlines: [{ y: 0 }, { y: res.thr5, dash: 1, color: '#ef4444' }, { y: -res.thr5, dash: 1, color: '#ef4444' }], marks: [mk('P', res.w5, res.zc.P)] },
+    { title: 'Q6 : Penanda Zero-Crossing Gelombang T (Setelah QRS diisolasi)', off: o, series: [{ y: res.w6, color: '#8b5cf6' }], hlines: [{ y: 0 }, { y: res.thr6, dash: 1, color: '#ef4444' }, { y: -res.thr6, dash: 1, color: '#ef4444' }], marks: [mk('T', res.w6, res.zc.T)], showX: true, xlabel: 'Sampel Waktu (n)' }
+  ];
+  return { panels: P, cols: 1, rowH: 195, zoom: true };
 }
+
 function tab_gradient(res) {
-  const grad = a => { const g = new Float64Array(a.length); for (let i = 1; i < a.length - 1; i++) g[i] = (a[i + 1] - a[i - 1]) / 2; g[0] = a[1] - a[0]; g[a.length - 1] = a[a.length - 1] - a[a.length - 2]; return g; };
+  const grad = a => {
+    const g = new Float64Array(a.length);
+    for (let i = 1; i < a.length - 1; i++) g[i] = (a[i + 1] - a[i - 1]) / 2;
+    g[0] = a[1] - a[0];
+    g[a.length - 1] = a[a.length - 1] - a[a.length - 2];
+    return g;
+  };
   const w4 = res.Wj[3], gw = grad(w4).map(v => v * 5), o = res.off;
   const P = [
-    { title: 'Sinyal ECG', off: o, series: [{ y: res.x, color: '#1f77b4' }] },
-    { title: 'Gradien sinyal: dx/dn', off: o, series: [{ y: grad(res.x), color: '#2ca02c' }] },
-    { title: 'Koefisien Q4, gradiennya (x5), dan modulus maxima-minima pasangan R', off: o, showX: true, xlabel: 'sampel (n)', hlines: [{ y: 0 }],
-      series: [{ y: w4, color: '#7e57c2', label: 'W4 (Q4)' }, { y: gw, color: '#ff7f0e', label: 'gradien W4 (x5)' }],
-      marks: [{ x: res.pairsR.flatMap(p => [p.e1 + o, p.e2 + o]), y: res.pairsR.flatMap(p => [w4[p.e1], w4[p.e2]]), color: '#000', shape: 'tri', label: 'modulus maxima/minima' }] }];
-  return { panels: P, cols: 1, rowH: 230, zoom: true };
+    { title: 'Sinyal EKG Asli', off: o, series: [{ y: res.x, color: getCss('--plot-signal', '#38bdf8'), lw: 1.5 }] },
+    { title: 'Turunan Pertama Sinyal: dx/dn', off: o, series: [{ y: grad(res.x), color: '#10b981', lw: 1.4 }] },
+    {
+      title: 'Koefisien Skala W4 (Q4), Gradien (x5), dan Pasangan Modulus Maxima-Minima R',
+      off: o,
+      showX: true,
+      xlabel: 'Sampel Waktu (n)',
+      hlines: [{ y: 0 }],
+      series: [{ y: w4, color: '#8b5cf6', label: 'W4 (Q4)' }, { y: gw, color: '#f97316', label: 'Gradien W4 (x5)' }],
+      marks: [{
+        x: res.pairsR.flatMap(p => [p.e1 + o, p.e2 + o]),
+        y: res.pairsR.flatMap(p => [w4[p.e1], w4[p.e2]]),
+        color: getCss('--text-primary', '#fff'),
+        shape: 'tri',
+        label: 'Modulus Maxima/Minima'
+      }]
+    }
+  ];
+  return { panels: P, cols: 1, rowH: 220, zoom: true };
 }
+
 function tab_detect(res) {
   const o = res.off, spans = [];
-  res.boxR.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#ff9800', label: 'pulsa QRS (Q4)' }));
-  res.boxP.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#2ca02c', label: 'pulsa P (Q5)' }));
-  res.boxT.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#00bcd4', label: 'pulsa T (Q6)' }));
+  res.boxR.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#f59e0b', label: 'Pulsa QRS (Q4)' }));
+  res.boxP.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#10b981', label: 'Pulsa P (Q5)' }));
+  res.boxT.forEach(b => spans.push({ a: b[0] + o, b: b[1] + o, color: '#06b6d4', label: 'Pulsa T (Q6)' }));
+  
   const marks = [];
-  for (const k of 'PQRST') { const ix = res[k]; if (ix.length) marks.push({ x: ix.map(i => i + o), y: ix.map(i => res.x[i]), color: COL[k], text: k, label: k, below: (k === 'Q' || k === 'S') && res.pol > 0 }); }
-  if (res.ref.length) marks.push({ x: res.ref.map(i => i + o), y: res.ref.map(i => res.x[i]), color: '#2e7d32', shape: 'x', label: 'anotasi .atr' });
-  let ttl = 'Deteksi P Q R S T - DWT db4 (from scratch)';
-  if (res.metric) ttl += `   |   R vs .atr: Se=${(res.metric[0] * 100).toFixed(1)}%  PPV=${(res.metric[1] * 100).toFixed(1)}%`;
-  return { panels: [{ title: ttl, off: o, showX: true, xlabel: 'sampel (n)', series: [{ y: res.x, color: css('--fg'), lw: 1.1 }], spans, marks }], cols: 1, rowH: 460, zoom: true };
+  for (const k of 'PQRST') {
+    const ix = res[k];
+    if (ix.length) {
+      marks.push({
+        x: ix.map(i => i + o),
+        y: ix.map(i => res.x[i]),
+        color: COL[k],
+        text: k,
+        label: `Titik ${k}`,
+        below: (k === 'Q' || k === 'S') && res.pol > 0
+      });
+    }
+  }
+  if (res.ref.length) {
+    marks.push({
+      x: res.ref.map(i => i + o),
+      y: res.ref.map(i => res.x[i]),
+      color: '#10b981',
+      shape: 'x',
+      label: 'Anotasi Ref .atr'
+    });
+  }
+  let ttl = `Hasil Deteksi Lengkap P-Q-R-S-T (DWT db4)`;
+  if (res.metric) {
+    ttl += `   |   Sensitivitas: ${(res.metric[0] * 100).toFixed(1)}%   PPV: ${(res.metric[1] * 100).toFixed(1)}%`;
+  }
+  return {
+    panels: [{
+      title: ttl,
+      off: o,
+      showX: true,
+      xlabel: 'Sampel Waktu (n)',
+      series: [{ y: res.x, color: getCss('--plot-signal', '#38bdf8'), lw: 1.8 }],
+      spans,
+      marks
+    }],
+    cols: 1,
+    rowH: 450,
+    zoom: true
+  };
 }
-const TABS = [['Prosses', tab_input], ['Mallat', tab_mallat], ['Filter Bank', tab_filter], ['Zero-cross', tab_zero], ['Gradient', tab_gradient], ['Detection', tab_detect]];
 
-/* ===================== UI / STATE ===================== */
+const TABS = [
+  ['Masukan', tab_input, '1'],
+  ['Mallat Q1-8', tab_mallat, '2'],
+  ['Filter Bank', tab_filter, '3'],
+  ['Zero-Crossing', tab_zero, '4'],
+  ['Gradien', tab_gradient, '5'],
+  ['Deteksi PQRST', tab_detect, '6']
+];
+
+/* =========================================================================
+   6. UI INTERACTION, APP STATE & CONTROLLER
+   ========================================================================= */
 const $ = id => document.getElementById(id);
-const state = { files: {}, hdr: null, atr: null, res: null, tab: 5, views: {}, demo: null };
+const state = {
+  files: {},
+  hdr: null,
+  atr: null,
+  res: null,
+  tab: 5,
+  views: {},
+  demo: null
+};
 
 function buildFields() {
-  const mk = (cls, prefix, arr) => { const box = $(cls); box.innerHTML = ''; arr.forEach((v, j) => { const l = document.createElement('label'); l.innerHTML = `${prefix}${j + 1}<input type="number" id="${cls}${j}" value="${v}">`; box.appendChild(l); }); };
-  mk('T', 'T', T_auto); mk('D', 'Delay', D_auto);
+  const mk = (cls, prefix, arr) => {
+    const box = $(cls);
+    box.innerHTML = '';
+    arr.forEach((v, j) => {
+      const item = document.createElement('div');
+      item.className = 'filter-item';
+      item.innerHTML = `<span>${prefix}${j + 1}</span><input type="number" id="${cls}${j}" value="${v}">`;
+      box.appendChild(item);
+    });
+  };
+  mk('T', 'T', T_auto);
+  mk('D', 'D', D_auto);
 }
-function readNums(prefix) { return Array.from({ length: JMAX }, (_, j) => parseInt($(prefix + j).value)); }
-function setStatus(msg, err) { const s = $('status'); s.textContent = msg; s.className = err ? 'err' : ''; }
 
-const readAB = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); r.readAsArrayBuffer(f); });
+function readNums(prefix) {
+  return Array.from({ length: JMAX }, (_, j) => parseInt($(prefix + j).value));
+}
+
+function setStatus(msg, statusType) {
+  const box = $('status-box');
+  const s = $('status');
+  s.textContent = msg;
+  box.className = 'status-card' + (statusType === 'err' ? ' err' : statusType === 'ok' ? ' ok' : '');
+}
+
+const readAB = f => new Promise((ok, no) => {
+  const r = new FileReader();
+  r.onload = () => ok(r.result);
+  r.onerror = () => no(r.error);
+  r.readAsArrayBuffer(f);
+});
+
 async function onFiles(list) {
-  state.files = {}; state.demo = null;
-  for (const f of list) { const ext = f.name.split('.').pop().toLowerCase(); if (['hea', 'dat', 'atr'].includes(ext)) state.files[ext] = f; }
-  const got = Object.keys(state.files).sort().join(', ');
-  $('fileinfo').textContent = got ? 'File: ' + got : 'Belum ada file';
-  if (!state.files.hea || !state.files.dat) { setStatus('Butuh minimal .hea dan .dat (+ .atr untuk anotasi)', true); return; }
-  try { state.hdr = parseHea(new TextDecoder().decode(await readAB(state.files.hea))); } catch (e) { setStatus('Gagal baca .hea: ' + e.message, true); return; }
+  state.files = {};
+  state.demo = null;
+  for (const f of list) {
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (['hea', 'dat', 'atr'].includes(ext)) state.files[ext] = f;
+  }
+  
+  $('chip-hea').classList.toggle('active', !!state.files.hea);
+  $('chip-dat').classList.toggle('active', !!state.files.dat);
+  $('chip-atr').classList.toggle('active', !!state.files.atr);
+
+  if (!state.files.hea || !state.files.dat) {
+    setStatus('Pilih minimal file .hea dan .dat (serta .atr jika ada untuk evaluasi akurasi).', 'err');
+    return;
+  }
+  try {
+    state.hdr = parseHea(new TextDecoder().decode(await readAB(state.files.hea)));
+  } catch (e) {
+    setStatus('Gagal membaca header .hea: ' + e.message, 'err');
+    return;
+  }
   state.datBuf = await readAB(state.files.dat);
   state.atr = state.files.atr ? parseAtr(await readAB(state.files.atr)) : null;
-  $('rec').value = state.hdr.name + ' (' + state.hdr.sigs.map(s => s.name).join(', ') + ')';
-  setStatus('File siap: ' + state.hdr.name + ', fs=' + state.hdr.fs + ' Hz, ' + state.hdr.ns + ' sampel. Klik Action.');
+
+  $('rec').value = `${state.hdr.name} (${state.hdr.sigs.map(s => s.name).join(', ')})`;
+  setStatus(`Dataset Siap: ${state.hdr.name} | fs=${state.hdr.fs} Hz | Panjang=${state.hdr.ns} sampel. Klik "Proses Analisis".`, 'ok');
+}
+
+async function loadLocal122() {
+  try {
+    setStatus('Mengunduh dataset 122 lokal (MIT-BIH)...');
+    const [heaRes, datRes, atrRes] = await Promise.all([
+      fetch('122.hea'),
+      fetch('122.dat'),
+      fetch('122.atr')
+    ]);
+    if (!heaRes.ok || !datRes.ok) throw new Error('File 122.hea / 122.dat tidak ditemukan via server.');
+    
+    const heaText = await heaRes.text();
+    state.hdr = parseHea(heaText);
+    state.datBuf = await datRes.arrayBuffer();
+    if (atrRes.ok) {
+      state.atr = parseAtr(await atrRes.arrayBuffer());
+    }
+    state.demo = null;
+    $('chip-hea').classList.add('active');
+    $('chip-dat').classList.add('active');
+    $('chip-atr').classList.toggle('active', !!state.atr);
+    $('rec').value = `${state.hdr.name} (${state.hdr.sigs.map(s => s.name).join(', ')})`;
+    setStatus(`Dataset 122 Siap: fs=${state.hdr.fs} Hz, N=${state.hdr.ns} sampel. Menjalankan analisis otomatis...`, 'ok');
+    action();
+  } catch (err) {
+    setStatus('Gagal muat dataset 122 lokal: ' + err.message + '. Silakan gunakan tombol file atau Sinyal Demo.', 'err');
+  }
 }
 
 function demoSignal(n, fs) {
-  const x = new Float64Array(n), g = (t, c, a, w) => a * Math.exp(-((t - c) ** 2) / (2 * w * w)); let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - .5; };
-  for (let i = 0; i < n; i++) { const t = i / fs; let v = 0.2 * Math.sin(2 * Math.PI * 0.3 * t) + 0.02 * rnd();
-    for (let c = 0.5; c < n / fs; c += 0.83) v += g(t, c - .18, .15, .025) + g(t, c - .03, -.12, .008) + g(t, c, 1.2, .01) + g(t, c + .03, -.2, .01) + g(t, c + .26, .3, .05);
-    x[i] = v; }
+  const x = new Float64Array(n), g = (t, c, a, w) => a * Math.exp(-((t - c) ** 2) / (2 * w * w));
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - 0.5; };
+  for (let i = 0; i < n; i++) {
+    const t = i / fs;
+    let v = 0.2 * Math.sin(2 * Math.PI * 0.3 * t) + 0.02 * rnd();
+    for (let c = 0.5; c < n / fs; c += 0.83) {
+      v += g(t, c - 0.18, 0.15, 0.025)   // Gelombang P
+         + g(t, c - 0.03, -0.12, 0.008)  // Gelombang Q
+         + g(t, c, 1.2, 0.01)            // Puncak R
+         + g(t, c + 0.03, -0.2, 0.01)    // Gelombang S
+         + g(t, c + 0.26, 0.3, 0.05);    // Gelombang T
+    }
+    x[i] = v;
+  }
   return x;
 }
 
 function action() {
   try {
-    const nd = parseInt($('nd').value), st = parseInt($('st').value), ch = parseInt($('ch').value) || 0; let x, fs, ref = [], name;
-    if (state.demo) { fs = 360; x = state.demo.slice(st, st + nd); name = 'DEMO sintetis'; }
-    else {
-      if (!state.hdr) { setStatus('Pilih file .hea, .dat, .atr dulu (atau klik Demo)', true); return; }
-      const hd = state.hdr; if (ch >= hd.nsig) throw new Error('Channel maksimal ' + (hd.nsig - 1));
-      const n = Math.min(nd, hd.ns - st); if (n < 200) throw new Error('NData/Start di luar panjang rekaman (' + hd.ns + ' sampel)');
-      x = readSignal(state.datBuf, hd, ch, st, n); fs = hd.fs; name = hd.sigs[ch].name;
-      if (state.atr) ref = state.atr.filter(a => BEAT_CODES.has(a[1]) && a[0] >= st && a[0] < st + n).map(a => a[0] - st);
+    const nd = parseInt($('nd').value), st = parseInt($('st').value), ch = parseInt($('ch').value) || 0;
+    let x, fs, ref = [], name;
+    if (state.demo) {
+      fs = 360;
+      x = state.demo.slice(st, st + nd);
+      name = 'DEMO Sintetis';
+    } else {
+      if (!state.hdr) {
+        setStatus('Harap pilih file .hea dan .dat terlebih dahulu, atau klik "Sinyal Demo".', 'err');
+        return;
+      }
+      const hd = state.hdr;
+      if (ch >= hd.nsig) throw new Error('Channel melebihi jumlah channel sinyal (' + (hd.nsig - 1) + ')');
+      const n = Math.min(nd, hd.ns - st);
+      if (n < 200) throw new Error('NData / Start di luar panjang sampel rekaman (' + hd.ns + ' sampel)');
+      x = readSignal(state.datBuf, hd, ch, st, n);
+      fs = hd.fs;
+      name = hd.sigs[ch].name;
+      if (state.atr) {
+        ref = state.atr.filter(a => BEAT_CODES.has(a[1]) && a[0] >= st && a[0] < st + n).map(a => a[0] - st);
+      }
     }
-    if (x.length < 400) throw new Error('Sinyal terlalu pendek (minimal sekitar 400 sampel)');
+
+    if (x.length < 400) throw new Error('Sinyal terlalu pendek (minimal butuh 400 sampel)');
     let T = T_auto, D = D_auto;
-    if ($('auto').checked) { T_auto.forEach((v, j) => { $('T' + j).value = v; $('D' + j).value = D_auto[j]; }); } else { T = readNums('T'); D = readNums('D'); }
-    const P = { ThR: +$('thR').value, ThP: +$('thP').value, ThT: +$('thT').value, Refr: +$('refr').value, Pwin: +$('pw').value, Twin: +$('tw').value, Start: st };
-    state.res = analyze(Float64Array.from(x), fs, ref, P, T, D); state.res.name = name; state.views = {};
-    setStatus('OK  fs=' + fs + ' Hz  N=' + x.length + (ref.length ? '  anotasi=' + ref.length : '')); draw();
-  } catch (e) { setStatus('ERROR: ' + e.message, true); console.error(e); }
+    if ($('auto').checked) {
+      T_auto.forEach((v, j) => { $('T' + j).value = v; $('D' + j).value = D_auto[j]; });
+    } else {
+      T = readNums('T');
+      D = readNums('D');
+    }
+
+    const P = {
+      ThR: +$('thR').value,
+      ThP: +$('thP').value,
+      ThT: +$('thT').value,
+      Refr: +$('refr').value,
+      Pwin: +$('pw').value,
+      Twin: +$('tw').value,
+      Start: st
+    };
+
+    state.res = analyze(Float64Array.from(x), fs, ref, P, T, D);
+    state.res.name = name;
+    state.views = {};
+    setStatus(`Analisis Sukses: ${name} | fs=${fs} Hz | N=${x.length} sampel | ${state.res.R.length} detak terdeteksi`, 'ok');
+    draw();
+  } catch (e) {
+    setStatus('Error Proses: ' + e.message, 'err');
+    console.error(e);
+  }
 }
 
-function updateStats(res) {
-  const box = $('stats-box');
+function updateTelemetryRibbon(res) {
   if (!res || !res.R || res.R.length < 2) {
-    if (box) box.style.display = 'none';
+    $('kpi-bpm-val').textContent = '--';
+    $('kpi-bpm-badge').textContent = 'Tidak Cukup Data';
+    $('kpi-bpm-badge').className = 'kpi-badge warn';
+    $('kpi-beats-val').textContent = res ? res.R.length : '--';
+    $('kpi-beats-sub').textContent = 'Detak terdeteksi';
+    $('kpi-rr-val').textContent = '--';
+    $('kpi-acc-val').textContent = '--';
+    $('kpi-acc-sub').textContent = 'Tidak ada ref .atr';
     return;
   }
-  box.style.display = 'block';
-  // Hitung interval RR rata-rata dalam detik
+
   const rIdx = res.R;
   let totalRR = 0;
   for (let i = 1; i < rIdx.length; i++) {
     totalRR += (rIdx[i] - rIdx[i - 1]) / res.fs;
   }
-  const meanRR = totalRR / (rIdx.length - 1);
-  const bpm = Math.round(60 / meanRR);
-  let status = 'Normal (60-100)';
-  if (bpm < 60) status = 'Bradikardia (<60)';
-  else if (bpm > 100) status = 'Takikardia (>100)';
-  
-  $('stat-bpm').textContent = `BPM: ${bpm} (${status})`;
-  $('stat-beats').textContent = `Detak: ${res.R.length} beats / ${(res.x.length / res.fs).toFixed(2)} detik`;
-  if (res.metric) {
-    $('stat-acc').textContent = `Akurasi: Se=${(res.metric[0] * 100).toFixed(1)}% | PPV=${(res.metric[1] * 100).toFixed(1)}%`;
+  const meanRRSec = totalRR / (rIdx.length - 1);
+  const meanRRMilli = Math.round(meanRRSec * 1000);
+  const bpm = Math.round(60 / meanRRSec);
+
+  $('kpi-bpm-val').textContent = bpm;
+  const badge = $('kpi-bpm-badge');
+  if (bpm < 60) {
+    badge.textContent = 'Bradikardia (<60)';
+    badge.className = 'kpi-badge warn';
+    $('kpi-bpm-sub').textContent = 'Laju di bawah normal';
+  } else if (bpm > 100) {
+    badge.textContent = 'Takikardia (>100)';
+    badge.className = 'kpi-badge danger';
+    $('kpi-bpm-sub').textContent = 'Laju di atas normal';
   } else {
-    $('stat-acc').textContent = `Akurasi: Tidak ada ref .atr`;
+    badge.textContent = 'Sinus Normal (60-100)';
+    badge.className = 'kpi-badge';
+    $('kpi-bpm-sub').textContent = 'Ritme stabil dan sehat';
+  }
+
+  const durationSec = (res.x.length / res.fs).toFixed(2);
+  $('kpi-beats-val').textContent = res.R.length;
+  $('kpi-beats-sub').textContent = `Durasi rekaman: ${durationSec} detik`;
+
+  $('kpi-rr-val').textContent = meanRRMilli;
+  $('kpi-rr-sub').textContent = `Interval R-R rata-rata`;
+
+  if (res.metric) {
+    const se = (res.metric[0] * 100).toFixed(1);
+    const ppv = (res.metric[1] * 100).toFixed(1);
+    $('kpi-acc-val').textContent = `${se}%`;
+    $('kpi-acc-badge').textContent = 'Tervalidasi';
+    $('kpi-acc-badge').className = 'kpi-badge';
+    $('kpi-acc-sub').textContent = `Sensitivitas: ${se}% | PPV: ${ppv}%`;
+  } else {
+    $('kpi-acc-val').textContent = 'N/A';
+    $('kpi-acc-badge').textContent = 'Mode Tanpa Ref';
+    $('kpi-acc-badge').className = 'kpi-badge warn';
+    $('kpi-acc-sub').textContent = 'Muat file .atr untuk uji validasi';
   }
 }
 
+function updateBeatTable(res) {
+  const tbody = $('beat-table-body');
+  if (!res || !res.R || !res.R.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 12px;">Belum ada hasil deteksi.</td></tr>';
+    return;
+  }
+  const o = res.off;
+  let html = '';
+  for (let i = 0; i < res.R.length; i++) {
+    const r = res.R[i] !== undefined ? res.R[i] + o : '-';
+    const q = res.Q && res.Q[i] !== undefined ? res.Q[i] + o : '-';
+    const s = res.S && res.S[i] !== undefined ? res.S[i] + o : '-';
+    const p = res.P && res.P[i] !== undefined ? res.P[i] + o : '-';
+    const t = res.T && res.T[i] !== undefined ? res.T[i] + o : '-';
+    let rr = '-';
+    let localBpm = '-';
+    if (i > 0 && res.R[i] !== undefined && res.R[i - 1] !== undefined) {
+      const diffMs = (res.R[i] - res.R[i - 1]) / res.fs * 1000;
+      rr = diffMs.toFixed(0) + ' ms';
+      localBpm = Math.round(60000 / diffMs) + ' bpm';
+    }
+    html += `
+      <tr>
+        <td><strong>#${i + 1}</strong></td>
+        <td><span class="tag-p">${p}</span></td>
+        <td><span class="tag-q">${q}</span></td>
+        <td><span class="tag-r">${r}</span></td>
+        <td><span class="tag-s">${s}</span></td>
+        <td><span class="tag-t">${t}</span></td>
+        <td>${rr}</td>
+        <td>${localBpm}</td>
+      </tr>
+    `;
+  }
+  tbody.innerHTML = html;
+}
+
 function draw() {
-  const res = state.res; if (!res) return;
-  const [, fn] = TABS[state.tab]; const t = fn(res), cv = $('cv');
-  state.cur = t; const full = [res.off, res.off + res.x.length - 1];
-  if (!state.views[state.tab]) state.views[state.tab] = full.slice(); t.full = full;
+  const res = state.res;
+  if (!res) return;
+  const [, fn] = TABS[state.tab];
+  const t = fn(res), cv = $('cv');
+  state.cur = t;
+  const full = [res.off, res.off + res.x.length - 1];
+  if (!state.views[state.tab]) state.views[state.tab] = full.slice();
+  t.full = full;
+
   render(cv, t.panels, t.zoom ? state.views[state.tab] : full, t.cols, t.rowH);
+
   let info = '';
   if (state.tab === 5) {
     const L = k => k + ' (' + res[k].length + '): ' + res[k].map(i => i + res.off).join(', ');
@@ -547,30 +2368,35 @@ function draw() {
       info += '\n\nInterval RR: ' + rr.join(', ');
     }
   }
-  $('info').textContent = info; $('hint').textContent = t.zoom ? 'Scroll = zoom, seret = geser, klik ganda = reset' : '';
-  updateStats(res);
+  $('info').textContent = info;
+  $('hint').textContent = t.zoom
+    ? '🖱️ Scroll mouse = Zoom in/out, seret = Geser horizontal, klik ganda = Reset tampilan'
+    : 'Skala tampilan tetap untuk representasi filter';
+
+  updateTelemetryRibbon(res);
+  updateBeatTable(res);
 }
 
 function resetDefaults() {
-  $('thR').value = 0.4;
-  $('thP').value = 0.15;
-  $('thT').value = 0.2;
+  $('thR').value = 0.4; $('thR-slider').value = 0.4;
+  $('thP').value = 0.15; $('thP-slider').value = 0.15;
+  $('thT').value = 0.2; $('thT-slider').value = 0.2;
   $('refr').value = 200;
   $('pw').value = 300;
   $('tw').value = 450;
   $('auto').checked = true;
   T_auto.forEach((v, j) => { $('T' + j).value = v; $('D' + j).value = D_auto[j]; });
-  setStatus('Pengaturan dikembalikan ke nilai default.');
+  setStatus('Parameter ambang batas dikembalikan ke nilai default pabrik.', 'ok');
   if (state.res || state.hdr || state.demo) action();
 }
 
 function exportToCSV() {
   const res = state.res;
   if (!res || !res.R || !res.R.length) {
-    alert('Belum ada data hasil analisis untuk diunduh.');
+    alert('Belum ada data hasil analisis untuk diunduh. Silakan jalankan analisis terlebih dahulu.');
     return;
   }
-  let csv = 'No,Beat_Index,Sample_R,Sample_Q,Sample_S,Sample_P,Sample_T,RR_Interval_ms\n';
+  let csv = 'No,Beat_Index,Sample_R,Sample_Q,Sample_S,Sample_P,Sample_T,RR_Interval_ms,Local_BPM\n';
   const o = res.off;
   for (let i = 0; i < res.R.length; i++) {
     const r = res.R[i] !== undefined ? res.R[i] + o : '-';
@@ -579,10 +2405,13 @@ function exportToCSV() {
     const p = res.P && res.P[i] !== undefined ? res.P[i] + o : '-';
     const t = res.T && res.T[i] !== undefined ? res.T[i] + o : '-';
     let rr = '-';
+    let bpm = '-';
     if (i > 0 && res.R[i] !== undefined && res.R[i - 1] !== undefined) {
-      rr = ((res.R[i] - res.R[i - 1]) / res.fs * 1000).toFixed(1);
+      const diff = (res.R[i] - res.R[i - 1]) / res.fs * 1000;
+      rr = diff.toFixed(1);
+      bpm = Math.round(60000 / diff);
     }
-    csv += `${i + 1},${i + 1},${r},${q},${s},${p},${t},${rr}\n`;
+    csv += `${i + 1},${i + 1},${r},${q},${s},${p},${t},${rr},${bpm}\n`;
   }
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -595,23 +2424,191 @@ function exportToCSV() {
   URL.revokeObjectURL(url);
 }
 
+function zoomByFactor(factor) {
+  const t = state.cur;
+  if (!t || !t.zoom || !state.views[state.tab]) return;
+  const v = state.views[state.tab];
+  const center = (v[0] + v[1]) / 2;
+  const halfSpan = ((v[1] - v[0]) / 2) * factor;
+  let a = center - halfSpan, b = center + halfSpan;
+  a = Math.max(a, t.full[0]);
+  b = Math.min(b, t.full[1]);
+  if (b - a < 20) return;
+  state.views[state.tab] = [a, b];
+  draw();
+}
+
+function resetZoom() {
+  if (state.cur && state.cur.zoom) {
+    state.views[state.tab] = state.cur.full.slice();
+    draw();
+  }
+}
+
+function initTheme() {
+  const saved = localStorage.getItem('cardiowave-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeIcon(saved);
+  $('theme-toggle').onclick = () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('cardiowave-theme', next);
+    updateThemeIcon(next);
+    draw();
+  };
+}
+
+function updateThemeIcon(theme) {
+  const icon = $('theme-icon');
+  if (theme === 'dark') {
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>';
+  } else {
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
+}
+
+function initSyncSliders() {
+  const sync = (sliderId, inputId) => {
+    const s = $(sliderId), inp = $(inputId);
+    s.oninput = () => { inp.value = s.value; };
+    inp.oninput = () => { s.value = inp.value; };
+  };
+  sync('thR-slider', 'thR');
+  sync('thP-slider', 'thP');
+  sync('thT-slider', 'thT');
+}
+
+function initDragAndDrop() {
+  const dz = $('dropzone');
+  const fileInput = $('files');
+
+  ['dragenter', 'dragover'].forEach(name => {
+    dz.addEventListener(name, e => {
+      e.preventDefault();
+      dz.classList.add('dragover');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(name => {
+    dz.addEventListener(name, e => {
+      e.preventDefault();
+      dz.classList.remove('dragover');
+    });
+  });
+
+  dz.addEventListener('drop', e => {
+    if (e.dataTransfer && e.dataTransfer.files.length) {
+      onFiles(e.dataTransfer.files);
+    }
+  });
+
+  fileInput.onchange = e => onFiles(e.target.files);
+  $('btn-load-122').onclick = loadLocal122;
+}
+
+function initAccordion() {
+  const toggle = $('filter-accordion-toggle');
+  const container = $('filter-inputs-container');
+  const arrow = $('filter-arrow');
+  toggle.onclick = () => {
+    const isCollapsed = container.classList.toggle('collapsed');
+    arrow.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+  };
+}
+
 function initUI() {
+  initTheme();
   buildFields();
-  $('tabs').innerHTML = ''; TABS.forEach(([n], i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { state.tab = i; document.querySelectorAll('#tabs button').forEach((x, k) => x.classList.toggle('on', k === i)); draw(); }; if (i === state.tab) b.className = 'on'; $('tabs').appendChild(b); });
-  $('files').onchange = e => onFiles(e.target.files); $('go').onclick = action;
+  initSyncSliders();
+  initDragAndDrop();
+  initAccordion();
+
+  // Build Tabs
+  const tabsContainer = $('tabs');
+  tabsContainer.innerHTML = '';
+  TABS.forEach(([title,, num], i) => {
+    const b = document.createElement('button');
+    b.className = 'tab-btn' + (i === state.tab ? ' active' : '');
+    b.innerHTML = `<span>${title}</span><span class="tab-badge">${num}</span>`;
+    b.onclick = () => {
+      state.tab = i;
+      document.querySelectorAll('#tabs .tab-btn').forEach((x, k) => x.classList.toggle('active', k === i));
+      draw();
+    };
+    tabsContainer.appendChild(b);
+  });
+
+  $('go').onclick = action;
   $('reset-btn').onclick = resetDefaults;
   $('export-csv-btn').onclick = exportToCSV;
-  $('demo').onclick = () => { $('st').value = 0; $('nd').value = 999; state.demo = demoSignal(4000, 360); state.hdr = null; $('rec').value = 'DEMO sintetis'; $('fileinfo').textContent = 'Mode demo (tanpa file)'; action(); };
-  const cv = $('cv'); let drag = null;
-  cv.onwheel = e => { const t = state.cur; if (!t || !t.zoom) return; e.preventDefault(); const v = state.views[state.tab], rect = cv.getBoundingClientRect(), W = rect.width - ML - MR;
-    const f = Math.min(1, Math.max(0, (e.clientX - rect.left - ML) / W)), c = v[0] + f * (v[1] - v[0]), k = e.deltaY > 0 ? 1.25 : 0.8; let a = c - (c - v[0]) * k, b = c + (v[1] - c) * k;
-    a = Math.max(a, t.full[0]); b = Math.min(b, t.full[1]); if (b - a < 20) return; state.views[state.tab] = [a, b]; draw(); };
-  cv.onmousedown = e => { drag = { x: e.clientX, v: state.views[state.tab] && state.views[state.tab].slice() }; };
+
+  $('demo').onclick = () => {
+    $('st').value = 0;
+    $('nd').value = 999;
+    state.demo = demoSignal(4000, 360);
+    state.hdr = null;
+    $('rec').value = 'DEMO Sintetis (Simulasi Gelombang Jantung)';
+    $('chip-hea').classList.remove('active');
+    $('chip-dat').classList.remove('active');
+    $('chip-atr').classList.remove('active');
+    action();
+  };
+
+  $('zoom-in').onclick = () => zoomByFactor(0.75);
+  $('zoom-out').onclick = () => zoomByFactor(1.33);
+  $('zoom-reset').onclick = resetZoom;
+
+  // Canvas Mouse Interactions
+  const cv = $('cv');
+  let drag = null;
+
+  cv.onwheel = e => {
+    const t = state.cur;
+    if (!t || !t.zoom) return;
+    e.preventDefault();
+    const v = state.views[state.tab];
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width - ML - MR;
+    const f = Math.min(1, Math.max(0, (e.clientX - rect.left - ML) / W));
+    const c = v[0] + f * (v[1] - v[0]);
+    const k = e.deltaY > 0 ? 1.25 : 0.8;
+    let a = c - (c - v[0]) * k, b = c + (v[1] - c) * k;
+    a = Math.max(a, t.full[0]);
+    b = Math.min(b, t.full[1]);
+    if (b - a < 20) return;
+    state.views[state.tab] = [a, b];
+    draw();
+  };
+
+  cv.onmousedown = e => {
+    drag = { x: e.clientX, v: state.views[state.tab] && state.views[state.tab].slice() };
+  };
+
   window.onmouseup = () => { drag = null; };
-  window.onmousemove = e => { const t = state.cur; if (!drag || !drag.v || !t || !t.zoom) return; const rect = cv.getBoundingClientRect(), W = rect.width - ML - MR, span = drag.v[1] - drag.v[0], dx = -(e.clientX - drag.x) / W * span;
-    let a = drag.v[0] + dx, b = drag.v[1] + dx; if (a < t.full[0]) { b += t.full[0] - a; a = t.full[0]; } if (b > t.full[1]) { a -= b - t.full[1]; b = t.full[1]; } state.views[state.tab] = [a, b]; draw(); };
-  cv.ondblclick = () => { if (state.cur && state.cur.zoom) { state.views[state.tab] = state.cur.full.slice(); draw(); } };
+
+  window.onmousemove = e => {
+    const t = state.cur;
+    if (!drag || !drag.v || !t || !t.zoom) return;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width - ML - MR;
+    const span = drag.v[1] - drag.v[0];
+    const dx = -(e.clientX - drag.x) / W * span;
+    let a = drag.v[0] + dx, b = drag.v[1] + dx;
+    if (a < t.full[0]) { b += t.full[0] - a; a = t.full[0]; }
+    if (b > t.full[1]) { a -= b - t.full[1]; b = t.full[1]; }
+    state.views[state.tab] = [a, b];
+    draw();
+  };
+
+  cv.ondblclick = resetZoom;
   window.onresize = draw;
+
+  // Auto load demo on start so user immediately sees rich telemetry
+  $('demo').click();
 }
+
 window.addEventListener('DOMContentLoaded', initUI);
-</script></body></html>
+</script>
+</body>
+</html>
