@@ -2,13 +2,36 @@
 
 Proyek ini merupakan implementasi sistem deteksi delineasi gelombang elektrokardiogram (**P-Q-R-S-T**) menggunakan metode **Discrete Wavelet Transform (DWT)** dengan basis **Daubechies 4 (db4)** yang dibangun secara mandiri (_from scratch_, tanpa pustaka komputasi wavelet otomatis).
 
-Aplikasi web interaktif **CardioWave DWT** dirancang dengan antarmuka telemetri klinis modern untuk memproses sinyal EKG digital standar biomedis (format PhysioNet MIT-BIH Arrhythmia Database) serta menguraikan proses dekomposisi multiresolusi dan ekstraksi fitur titik gelombang jantung secara transparan, akurat, dan visual.
+Aplikasi web interaktif **CardioWave DWT** dirancang dengan antarmuka telemetri klinis modern untuk memproses sinyal EKG digital standar biomedis dari **MIT-BIH Arrhythmia Database (PhysioNet)**, khususnya **Record 122**, serta menguraikan proses dekomposisi multiresolusi dan ekstraksi fitur titik gelombang jantung secara transparan, akurat, dan visual.
 
 ![Hasil Deteksi Gelombang P-Q-R-S-T EKG](hasil%20DWT.png)
+*Gambar 1: Hasil visualisasi deteksi gelombang P-Q-R-S-T pada Record 122 MIT-BIH Arrhythmia Database.*
 
 ---
 
-## 1. Landasan Teori & Referensi Jurnal
+## 1. Dataset: MIT-BIH Arrhythmia Database (Record 122)
+
+Eksperimen dan pengujian pada proyek ini menggunakan data klinis nyata dari repositori resmi **PhysioNet MIT-BIH Arrhythmia Database**:
+
+* **Sumber Dataset:** [PhysioNet MIT-BIH Arrhythmia Database](https://physionet.org/content/mitdb/)
+* **Identitas Rekaman:** **Record 122**
+* **Karakteristik Sinyal:**
+  * Frekuensi Sampling ($f_s$): **360 Hz** (360 sampel per detik).
+  * Saluran Sadapan: Sadapan bipolar **MLII** (*Modified Limb Lead II*) dan sadapan prekordial **V1**.
+  * Total Panjang Rekaman: 650.000 sampel ($\approx 30$ menit).
+
+### Tiga Berkas Format PhysioNet yang Digunakan:
+
+1. **`122.hea` (Header File):**  
+   Berkas teks ASCII deskriptif yang memuat spesifikasi teknis sinyal: jumlah sinyal (2 channel), frekuensi cuplik (360 Hz), format penyimpanan (Format 212), faktor konversi ADC (*gain* = 200 ADC units/mV), garis dasar (*baseline*), serta nama kanal elektroda (`MLII`, `V1`).
+2. **`122.dat` (Signal Data File):**  
+   Berkas biner yang menyimpan data amplitudo EKG mentah dengan pengemasan terkompresi *Format 212* (dua sampel 12-bit dikemas dalam 3 byte berselingan).
+3. **`122.atr` (Reference Annotation File):**  
+   Berkas biner penanda referensi (*ground truth*) yang diverifikasi secara independen oleh setidaknya dua dokter spesialis kardiologi. Berkas ini digunakan untuk menguji akurasi algoritma melalui metrik **Sensitivitas ($Se$)** dan **Nilai Prediktif Positif ($PPV$)**.
+
+---
+
+## 2. Landasan Teori & Referensi Jurnal
 
 Algoritma ini diadaptasi dari metode standar internasional deteksi delineasi gelombang EKG berbasis _wavelet_:
 
@@ -24,7 +47,7 @@ Algoritma ini diadaptasi dari metode standar internasional deteksi delineasi gel
 
 ---
 
-## 2. Struktur Filter & Koefisien db4 (Manual)
+## 3. Struktur Filter & Koefisien db4 (Manual)
 
 Koefisien filter LPF (_Low Pass Filter_) $h[n]$ ortogonal db4 didefinisikan secara eksplisit:
 ```text
@@ -46,7 +69,7 @@ g[n] = (-1)^n * h[L - 1 - n]
 
 ---
 
-## 3. Alur Komputasi & Deteksi PQRST (Step-by-Step)
+## 4. Alur Komputasi & Deteksi PQRST (Step-by-Step)
 
 ```text
 [File .dat / .hea / .atr / Demo]
@@ -82,7 +105,7 @@ g[n] = (-1)^n * h[L - 1 - n]
 
 ---
 
-## 4. Fitur Antarmuka Modern (CardioWave DWT)
+## 5. Fitur Antarmuka Modern (CardioWave DWT)
 
 Aplikasi web interaktif [ecg dwt.html](ecg%20dwt.html) telah diperbarui dengan tampilan telemetri klinis mutakhir:
 
@@ -107,7 +130,7 @@ Aplikasi web interaktif [ecg dwt.html](ecg%20dwt.html) telah diperbarui dengan t
 
 ---
 
-## 5. 6 Tab Visualisasi Dekomposisi & Analisis
+## 6. 6 Tab Visualisasi Dekomposisi & Analisis
 
 1. **Tab 1 - Masukan:** Visualisasi sinyal EKG mentah (mV) beserta titik anotasi ahli dari `.atr`.
 2. **Tab 2 - Mallat Q1–8:** Penguraian 8 skala koefisien wavelet $Q_1$ s/d $Q_8$ yang telah diselaraskan penundaan fasanya ($T_j + Delay_j = T_{\max}$).
@@ -118,7 +141,7 @@ Aplikasi web interaktif [ecg dwt.html](ecg%20dwt.html) telah diperbarui dengan t
 
 ---
 
-## 6. Penjelasan Parameter Kontrol
+## 7. Penjelasan Parameter Kontrol
 
 ### A. Dataset & Sinyal
 - `N Data`: Jumlah sampel sinyal yang diproses (default: 999 sampel $\approx 2.77$ detik pada $fs = 360$ Hz).
@@ -138,7 +161,7 @@ Aplikasi web interaktif [ecg dwt.html](ecg%20dwt.html) telah diperbarui dengan t
 
 ---
 
-## 7. Petunjuk Menjalankan Program
+## 8. Petunjuk Menjalankan Program
 
 ### Cara 1: Menggunakan Aplikasi Web Interaktif
 1. Buka file `ecg dwt.html` langsung di browser modern (Google Chrome, Microsoft Edge, Firefox) atau melalui local server (misal: `python -m http.server 8080`).
